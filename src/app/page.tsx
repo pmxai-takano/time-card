@@ -1,65 +1,84 @@
-import Image from "next/image";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { AttendanceForm } from "@/components/attendance-form";
+import { LogoutButton } from "@/components/logout-button";
+import { calculateWorkMinutes, formatMinutes } from "@/lib/time";
+import { createClient } from "@/lib/supabase/server";
+import { AttendanceRecord } from "@/types/attendance";
 
-export default function Home() {
+type Props = {
+  searchParams: Promise<{ date?: string }>;
+};
+
+function toInputTime(value: string | null): string {
+  return value ? value.slice(0, 5) : "";
+}
+
+export default async function Home({ searchParams }: Props) {
+  const params = await searchParams;
+  const selectedDate = params.date ?? new Date().toISOString().slice(0, 10);
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data } = await supabase
+    .from("attendance_records")
+    .select("*")
+    .eq("work_date", selectedDate)
+    .maybeSingle();
+
+  const record = data as AttendanceRecord | null;
+  const todayWorkMinutes = calculateWorkMinutes({
+    clockIn: record?.clock_in ?? null,
+    clockOut: record?.clock_out ?? null,
+    breakStart: record?.break_start ?? null,
+    breakEnd: record?.break_end ?? null,
+  });
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className="mx-auto w-full max-w-2xl space-y-4 p-4">
+      <header className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">time-card</h1>
+        <LogoutButton />
+      </header>
+
+      <nav className="flex gap-2 text-sm">
+        <Link href="/" className="rounded bg-slate-200 px-3 py-2">
+          メイン
+        </Link>
+        <Link href="/records" className="rounded bg-slate-200 px-3 py-2">
+          一覧
+        </Link>
+        <Link href="/summary" className="rounded bg-slate-200 px-3 py-2">
+          集計
+        </Link>
+        <a href="/api/csv" className="rounded bg-emerald-200 px-3 py-2">
+          CSV出力
+        </a>
+      </nav>
+
+      <AttendanceForm
+        initialValue={{
+          work_date: selectedDate,
+          clock_in: toInputTime(record?.clock_in ?? null),
+          clock_out: toInputTime(record?.clock_out ?? null),
+          break_start: toInputTime(record?.break_start ?? null),
+          break_end: toInputTime(record?.break_end ?? null),
+          memo: record?.memo ?? "",
+        }}
+      />
+
+      <section className="rounded-xl border bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">本日の勤怠</h2>
+        <p className="text-sm text-slate-700">勤務日: {selectedDate}</p>
+        <p className="text-sm text-slate-700">勤務時間: {formatMinutes(todayWorkMinutes)}</p>
+      </section>
+    </main>
   );
 }
