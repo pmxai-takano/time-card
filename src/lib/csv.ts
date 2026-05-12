@@ -1,3 +1,4 @@
+import { weekdayLabelJp } from "@/lib/calendar-jp";
 import { formatDayCodeForCsv } from "@/lib/day-codes";
 import { AttendanceRecord } from "@/types/attendance";
 import {
@@ -21,6 +22,7 @@ function displayTime(value: string | null): string {
 export function buildAttendanceCsv(records: AttendanceRecord[]): string {
   const header = [
     "勤務日",
+    "曜日",
     "勤怠区分",
     "出勤区分",
     "出勤",
@@ -52,6 +54,7 @@ export function buildAttendanceCsv(records: AttendanceRecord[]): string {
 
     return [
       record.work_date,
+      weekdayLabelJp(record.work_date),
       formatDayCodeForCsv(record.day_code),
       record.commute_type ?? "",
       displayTime(record.clock_in),
