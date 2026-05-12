@@ -28,9 +28,6 @@ export default async function SettingsPage() {
         <Link href="/" className="rounded bg-slate-200 px-3 py-2">
           勤務表
         </Link>
-        <Link href="/summary" className="rounded bg-slate-200 px-3 py-2">
-          集計
-        </Link>
         <Link href="/settings" className="rounded bg-slate-300 px-3 py-2 font-medium">
           設定
         </Link>

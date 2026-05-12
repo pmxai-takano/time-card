@@ -62,9 +62,6 @@ export default async function Home({ searchParams }: Props) {
         <Link href={`/?year=${year}&month=${month}`} className="rounded bg-slate-200 px-3 py-2">
           勤務表
         </Link>
-        <Link href="/summary" className="rounded bg-slate-200 px-3 py-2">
-          集計
-        </Link>
         <Link href="/settings" className="rounded bg-slate-200 px-3 py-2">
           設定
         </Link>

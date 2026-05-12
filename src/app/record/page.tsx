@@ -54,9 +54,6 @@ export default async function RecordPage({ searchParams }: Props) {
         >
           勤務表に戻る
         </Link>
-        <Link href="/summary" className="rounded bg-slate-200 px-3 py-2">
-          集計
-        </Link>
         <Link href="/settings" className="rounded bg-slate-200 px-3 py-2">
           設定
         </Link>
