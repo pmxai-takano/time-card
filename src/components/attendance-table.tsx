@@ -37,6 +37,7 @@ export function AttendanceTable({ records }: Props) {
               clockOut: record.clock_out,
               breakStart: record.break_start,
               breakEnd: record.break_end,
+              workDate: record.work_date,
             });
             return (
               <tr key={record.id} className="border-t">

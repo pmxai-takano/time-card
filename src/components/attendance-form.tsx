@@ -28,6 +28,7 @@ export function AttendanceForm({ initialValue }: Props) {
           clockOut: form.clock_out || null,
           breakStart: form.break_start || null,
           breakEnd: form.break_end || null,
+          workDate: form.work_date,
         }),
       ),
     [form],

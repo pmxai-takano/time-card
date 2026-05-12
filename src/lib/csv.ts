@@ -41,6 +41,7 @@ export function buildAttendanceCsv(records: AttendanceRecord[]): string {
       clockOut: record.clock_out,
       breakStart: record.break_start,
       breakEnd: record.break_end,
+      workDate: record.work_date,
     });
     const breakMin = breakDurationMinutes(record.break_start, record.break_end);
     const overtimeMin = calculateOvertimeMinutes({

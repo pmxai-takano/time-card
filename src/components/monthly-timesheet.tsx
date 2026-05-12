@@ -49,12 +49,13 @@ function formatPercent1(ratio: number): string {
 
 export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) {
   const totals = rows.reduce(
-    (acc, { record }) => {
+    (acc, { workDate, record }) => {
       const workMin = calculateWorkMinutes({
         clockIn: record?.clock_in ?? null,
         clockOut: record?.clock_out ?? null,
         breakStart: record?.break_start ?? null,
         breakEnd: record?.break_end ?? null,
+        workDate: record?.work_date ?? workDate,
       });
       const ot = record
         ? calculateOvertimeMinutes({
@@ -150,6 +151,7 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
                 clockOut: record?.clock_out ?? null,
                 breakStart: record?.break_start ?? null,
                 breakEnd: record?.break_end ?? null,
+                workDate: record?.work_date ?? workDate,
               });
               const brkMin = breakDurationMinutes(
                 record?.break_start ?? null,
