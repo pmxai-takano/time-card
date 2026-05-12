@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MonthlySummary } from "@/components/monthly-summary";
 import { LogoutButton } from "@/components/logout-button";
-import { calculateWorkMinutes } from "@/lib/time";
+import { calculateOvertimeMinutes, calculateWorkMinutes } from "@/lib/time";
 import { createClient } from "@/lib/supabase/server";
 import { AttendanceRecord } from "@/types/attendance";
 
@@ -22,7 +22,14 @@ export default async function SummaryPage() {
     .order("work_date", { ascending: true });
 
   const records = (data ?? []) as AttendanceRecord[];
-  const monthMap = new Map<string, { days: number; totalMinutes: number }>();
+  const monthMap = new Map<
+    string,
+    {
+      days: number;
+      totalMinutes: number;
+      overtimeMinutes: number;
+    }
+  >();
 
   records.forEach((record) => {
     const month = record.work_date.slice(0, 7);
@@ -32,10 +39,25 @@ export default async function SummaryPage() {
       breakStart: record.break_start,
       breakEnd: record.break_end,
     });
-    const current = monthMap.get(month) ?? { days: 0, totalMinutes: 0 };
+    const ot = calculateOvertimeMinutes({
+      workDate: record.work_date,
+      dayCode: record.day_code,
+      clockIn: record.clock_in,
+      clockOut: record.clock_out,
+      breakStart: record.break_start,
+      breakEnd: record.break_end,
+    });
+
+    const current = monthMap.get(month) ?? {
+      days: 0,
+      totalMinutes: 0,
+      overtimeMinutes: 0,
+    };
+
     monthMap.set(month, {
-      days: current.days + 1,
+      days: current.days + (record.clock_in && record.clock_out ? 1 : 0),
       totalMinutes: current.totalMinutes + workMinutes,
+      overtimeMinutes: current.overtimeMinutes + ot,
     });
   });
 
@@ -46,6 +68,7 @@ export default async function SummaryPage() {
       work_days: value.days,
       total_minutes: value.totalMinutes,
       average_minutes: value.days ? Math.round(value.totalMinutes / value.days) : 0,
+      overtime_minutes: value.overtimeMinutes,
     }));
 
   return (
@@ -54,15 +77,15 @@ export default async function SummaryPage() {
         <h1 className="text-xl font-bold">月別集計</h1>
         <LogoutButton />
       </header>
-      <nav className="flex gap-2 text-sm">
+      <nav className="flex flex-wrap gap-2 text-sm">
         <Link href="/" className="rounded bg-slate-200 px-3 py-2">
-          メイン
-        </Link>
-        <Link href="/records" className="rounded bg-slate-200 px-3 py-2">
-          一覧
+          勤務表
         </Link>
         <Link href="/summary" className="rounded bg-slate-200 px-3 py-2">
           集計
+        </Link>
+        <Link href="/settings" className="rounded bg-slate-200 px-3 py-2">
+          設定
         </Link>
       </nav>
       <MonthlySummary items={items} />

@@ -1,5 +1,11 @@
+import { formatDayCodeForCsv } from "@/lib/day-codes";
 import { AttendanceRecord } from "@/types/attendance";
-import { calculateWorkMinutes, formatMinutes } from "@/lib/time";
+import {
+  breakDurationMinutes,
+  calculateOvertimeMinutes,
+  calculateWorkMinutes,
+  formatMinutes,
+} from "@/lib/time";
 
 function escapeCsv(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -15,16 +21,29 @@ function displayTime(value: string | null): string {
 export function buildAttendanceCsv(records: AttendanceRecord[]): string {
   const header = [
     "勤務日",
+    "勤怠区分",
+    "出勤区分",
     "出勤",
     "退勤",
     "休憩開始",
     "休憩終了",
+    "休憩時間",
     "勤務時間",
+    "残業",
     "メモ",
   ];
 
   const rows = records.map((record) => {
-    const minutes = calculateWorkMinutes({
+    const workMinutes = calculateWorkMinutes({
+      clockIn: record.clock_in,
+      clockOut: record.clock_out,
+      breakStart: record.break_start,
+      breakEnd: record.break_end,
+    });
+    const breakMin = breakDurationMinutes(record.break_start, record.break_end);
+    const overtimeMin = calculateOvertimeMinutes({
+      workDate: record.work_date,
+      dayCode: record.day_code,
       clockIn: record.clock_in,
       clockOut: record.clock_out,
       breakStart: record.break_start,
@@ -33,11 +52,15 @@ export function buildAttendanceCsv(records: AttendanceRecord[]): string {
 
     return [
       record.work_date,
+      formatDayCodeForCsv(record.day_code),
+      record.commute_type ?? "",
       displayTime(record.clock_in),
       displayTime(record.clock_out),
       displayTime(record.break_start),
       displayTime(record.break_end),
-      formatMinutes(minutes),
+      formatMinutes(breakMin),
+      formatMinutes(workMinutes),
+      formatMinutes(overtimeMin),
       record.memo ?? "",
     ].map((cell) => escapeCsv(cell));
   });

@@ -10,21 +10,33 @@ time-card/
   src/
     app/
       api/
+        attendance-defaults/route.ts
+        attendance/fill-month/route.ts
         attendance/route.ts
         csv/route.ts
       auth/confirm/route.ts
       login/page.tsx
+      record/page.tsx
       records/page.tsx
+      settings/page.tsx
       summary/page.tsx
       layout.tsx
       page.tsx
     components/
+      attendance-defaults-form.tsx
       attendance-form.tsx
       attendance-table.tsx
+      fill-month-button.tsx
       login-form.tsx
       logout-button.tsx
       monthly-summary.tsx
+      monthly-timesheet.tsx
     lib/
+      attendance-defaults-map.ts
+      attendance-fields.ts
+      attendance-map.ts
+      calendar-jp.ts
+      commute-types.ts
       csv.ts
       time.ts
       supabase/
@@ -32,10 +44,14 @@ time-card/
         middleware.ts
         server.ts
     types/
+      attendance-defaults.ts
       attendance.ts
   supabase/
     schema.sql
     rls.sql
+    migration_timesheet_columns.sql
+    migration_commute_type.sql
+    migration_attendance_defaults.sql
   middleware.ts
   .env.example
 ```
@@ -76,6 +92,14 @@ npm run dev
 
 `supabase/schema.sql` を SQL Editor で実行してください。
 
+### 既に DB を作成済みの場合（カラム追加）
+
+以前の `schema.sql` のみ適用済みの場合は、`supabase/migration_timesheet_columns.sql` を SQL Editor で実行し、勤務表用カラム（勤怠区分・残業・各休暇日数など）を追加してください。
+
+その後、出勤区分用に `supabase/migration_commute_type.sql` を実行してください（`commute_type` 列）。
+
+平日デフォルトと一括登録用に `supabase/migration_attendance_defaults.sql` を実行してください（`attendance_defaults` テーブルと RLS）。**新規に更新後の `schema.sql` と `rls.sql` を流した場合はこのマイグレーションは不要**です（テーブル定義が重複するため）。
+
 ## 6) RLS設定SQL
 
 `supabase/rls.sql` を SQL Editor で実行してください。
@@ -83,19 +107,33 @@ npm run dev
 ## 7) 画面実装内容
 
 - `/login` : メールログイン（Magic Link）
-- `/` : メイン画面（勤務入力 + 今日の勤務時間）
-- `/records` : 日別一覧（編集ボタン付き）
-- `/summary` : 月別集計（勤務日数 / 合計 / 平均）
+- `/` : 月次勤務表（全日付行・フッター集計・前月/次月ナビ）。**当月表示時のみ**「当月の空白を初期値で埋める」で、土日祝を除く平日かつ未登録日にだけ行を追加
+- `/settings` : 平日デフォルト（出退勤・休憩・勤怠区分・出勤区分）。一括登録と保存用
+- `/record?date=YYYY-MM-DD` : 1日分の編集（保存は従来どおり upsert）
+- `/records` : 当月の勤務表（`/`）へリダイレクト
+- `/summary` : 月別集計（勤務・残業の月合計と平均）。残業は勤務日・勤怠区分・出退時刻から自動計算
 
-## 8) 勤務時間計算ロジック
+勤怠区分（`day_code`）は次の7種の **1文字コード** で保存します: 勤・残・前・後・有・特・リ（定義は `src/lib/day-codes.ts`）。欠・振は廃止済みですが、旧データの表示・CSV では名称を付けて出力します。
 
-`src/lib/time.ts` の `calculateWorkMinutes` で計算しています。
+出勤区分（`commute_type`）は在宅・出社・社外・出張または未設定（`null`）。選択肢の順序は `src/lib/commute-types.ts` のとおりです。
 
-計算式:
+## 8) 勤務時間・残業の計算
+
+`src/lib/time.ts` の `calculateWorkMinutes` で勤務時間を計算しています。
 
 ```txt
 勤務時間 = (退勤 - 出勤) - (休憩終了 - 休憩開始)
 ```
+
+残業（`calculateOvertimeMinutes`）は次のルールです（定時は8時間）。
+
+- 土曜・日曜・国民の祝日（振替休日含む）: 勤務時間のすべてを残業
+- 勤怠区分「残」: 同上（全日残業扱い）
+- 「前」（午前半休）: 18時以降の勤務のみ残業（休憩と重なる分は除く）
+- 「後」（午後半休）: 勤務時間から3時間を超える分が残業
+- 上記以外の平日: 8時間を超える分が残業
+
+祝日判定は `japanese-holidays` を使用しています（`src/lib/calendar-jp.ts`）。
 
 ## 9) CSV出力処理
 

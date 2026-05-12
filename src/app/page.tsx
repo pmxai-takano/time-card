@@ -1,22 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AttendanceForm } from "@/components/attendance-form";
+import { MonthlyTimesheet } from "@/components/monthly-timesheet";
 import { LogoutButton } from "@/components/logout-button";
-import { calculateWorkMinutes, formatMinutes } from "@/lib/time";
+import {
+  getTodayYmdJapan,
+  listWorkDatesInMonth,
+  parseYearMonth,
+} from "@/lib/calendar-jp";
 import { createClient } from "@/lib/supabase/server";
 import { AttendanceRecord } from "@/types/attendance";
 
 type Props = {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ year?: string; month?: string }>;
 };
-
-function toInputTime(value: string | null): string {
-  return value ? value.slice(0, 5) : "";
-}
 
 export default async function Home({ searchParams }: Props) {
   const params = await searchParams;
-  const selectedDate = params.date ?? new Date().toISOString().slice(0, 10);
+  const { year, month } = parseYearMonth(params.year, params.month);
 
   const supabase = await createClient();
   const {
@@ -27,58 +27,58 @@ export default async function Home({ searchParams }: Props) {
     redirect("/login");
   }
 
+  const dates = listWorkDatesInMonth(year, month);
+  const start = dates[0];
+  const end = dates[dates.length - 1];
+
   const { data } = await supabase
     .from("attendance_records")
     .select("*")
-    .eq("work_date", selectedDate)
-    .maybeSingle();
+    .gte("work_date", start)
+    .lte("work_date", end)
+    .order("work_date", { ascending: true });
 
-  const record = data as AttendanceRecord | null;
-  const todayWorkMinutes = calculateWorkMinutes({
-    clockIn: record?.clock_in ?? null,
-    clockOut: record?.clock_out ?? null,
-    breakStart: record?.break_start ?? null,
-    breakEnd: record?.break_end ?? null,
-  });
+  const map = new Map<string, AttendanceRecord>();
+  for (const row of (data ?? []) as AttendanceRecord[]) {
+    map.set(row.work_date, row);
+  }
+
+  const rows = dates.map((workDate) => ({
+    workDate,
+    record: map.get(workDate) ?? null,
+  }));
+
+  const today = getTodayYmdJapan();
+  const showFillMissing = year === today.year && month === today.month;
 
   return (
-    <main className="mx-auto w-full max-w-2xl space-y-4 p-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">time-card</h1>
+    <main className="mx-auto w-full max-w-7xl space-y-4 px-2 py-3 sm:px-4 sm:py-4">
+      <header className="flex items-center justify-between gap-2">
+        <h1 className="text-lg font-bold sm:text-xl">time-card</h1>
         <LogoutButton />
       </header>
 
-      <nav className="flex gap-2 text-sm">
-        <Link href="/" className="rounded bg-slate-200 px-3 py-2">
-          メイン
-        </Link>
-        <Link href="/records" className="rounded bg-slate-200 px-3 py-2">
-          一覧
+      <nav className="flex flex-wrap gap-2 text-sm">
+        <Link href={`/?year=${year}&month=${month}`} className="rounded bg-slate-200 px-3 py-2">
+          勤務表
         </Link>
         <Link href="/summary" className="rounded bg-slate-200 px-3 py-2">
           集計
+        </Link>
+        <Link href="/settings" className="rounded bg-slate-200 px-3 py-2">
+          設定
         </Link>
         <a href="/api/csv" className="rounded bg-emerald-200 px-3 py-2">
           CSV出力
         </a>
       </nav>
 
-      <AttendanceForm
-        initialValue={{
-          work_date: selectedDate,
-          clock_in: toInputTime(record?.clock_in ?? null),
-          clock_out: toInputTime(record?.clock_out ?? null),
-          break_start: toInputTime(record?.break_start ?? null),
-          break_end: toInputTime(record?.break_end ?? null),
-          memo: record?.memo ?? "",
-        }}
+      <MonthlyTimesheet
+        year={year}
+        month={month}
+        rows={rows}
+        showFillMissing={showFillMissing}
       />
-
-      <section className="rounded-xl border bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">本日の勤怠</h2>
-        <p className="text-sm text-slate-700">勤務日: {selectedDate}</p>
-        <p className="text-sm text-slate-700">勤務時間: {formatMinutes(todayWorkMinutes)}</p>
-      </section>
     </main>
   );
 }

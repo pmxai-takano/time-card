@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isValidTime } from "@/lib/time";
+import {
+  normalizeTimeForDb,
+  parseCommuteTypeForDb,
+  parseDayCodeForDb,
+} from "@/lib/attendance-fields";
+import { calculateOvertimeMinutes } from "@/lib/time";
 
 const TABLE = "attendance_records";
-
-function normalizeTime(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  return isValidTime(trimmed) ? `${trimmed}:00` : null;
-}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -22,11 +21,22 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const workDate = String(body.work_date ?? "");
-  const clockIn = normalizeTime(String(body.clock_in ?? ""));
-  const clockOut = normalizeTime(String(body.clock_out ?? ""));
-  const breakStart = normalizeTime(String(body.break_start ?? ""));
-  const breakEnd = normalizeTime(String(body.break_end ?? ""));
+  const clockIn = normalizeTimeForDb(String(body.clock_in ?? ""));
+  const clockOut = normalizeTimeForDb(String(body.clock_out ?? ""));
+  const breakStart = normalizeTimeForDb(String(body.break_start ?? ""));
+  const breakEnd = normalizeTimeForDb(String(body.break_end ?? ""));
   const memo = String(body.memo ?? "").slice(0, 1000);
+  const parsedDayCode = parseDayCodeForDb(body.day_code);
+  if (!parsedDayCode.ok) {
+    return NextResponse.json({ message: parsedDayCode.message }, { status: 400 });
+  }
+  const dayCode = parsedDayCode.dayCode;
+
+  const parsedCommute = parseCommuteTypeForDb(body.commute_type);
+  if (!parsedCommute.ok) {
+    return NextResponse.json({ message: parsedCommute.message }, { status: 400 });
+  }
+  const commuteType = parsedCommute.commuteType;
 
   if (!workDate) {
     return NextResponse.json({ message: "勤務日が未入力です。" }, { status: 400 });
@@ -44,6 +54,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "休憩終了時刻の形式が不正です。" }, { status: 400 });
   }
 
+  const overtimeMinutes = calculateOvertimeMinutes({
+    workDate,
+    dayCode,
+    clockIn,
+    clockOut,
+    breakStart,
+    breakEnd,
+  });
+
   const { error } = await supabase.from(TABLE).upsert(
     {
       user_id: user.id,
@@ -53,6 +72,15 @@ export async function POST(request: Request) {
       break_start: breakStart,
       break_end: breakEnd,
       memo,
+      day_code: dayCode,
+      commute_type: commuteType,
+      overtime_minutes: overtimeMinutes,
+      night_minutes: 0,
+      paid_leave_days: 0,
+      summer_leave_days: 0,
+      business_trip_days: 0,
+      substitute_leave_days: 0,
+      special_leave_days: 0,
     },
     { onConflict: "user_id,work_date" },
   );

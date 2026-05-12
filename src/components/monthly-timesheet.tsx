@@ -1,0 +1,277 @@
+import Link from "next/link";
+import {
+  formatMonthTitle,
+  getMonthlyStatutoryCaps,
+  getTodayYmdJapan,
+  isJapanPublicHoliday,
+  nextMonth,
+  prevMonth,
+  weekdayIndexJapan,
+  weekdayLabelJp,
+} from "@/lib/calendar-jp";
+import { commuteTypeDisplayClassName } from "@/lib/commute-types";
+import { formatDayCodeCell } from "@/lib/day-codes";
+import { FillMonthButton } from "@/components/fill-month-button";
+import { AttendanceRecord } from "@/types/attendance";
+import {
+  breakDurationMinutes,
+  calculateOvertimeMinutes,
+  calculateWorkMinutes,
+  formatMinutes,
+} from "@/lib/time";
+
+export type MonthlyTimesheetRow = {
+  workDate: string;
+  record: AttendanceRecord | null;
+};
+
+type Props = {
+  year: number;
+  month: number;
+  rows: MonthlyTimesheetRow[];
+  /** 日本時間の「当月」表示中のみ true（一括登録ボタン用） */
+  showFillMissing?: boolean;
+};
+
+function displayTime(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.slice(0, 5);
+}
+
+function memoShort(memo: string | null | undefined): string {
+  if (!memo) return "";
+  return memo.length > 10 ? `${memo.slice(0, 10)}…` : memo;
+}
+
+function formatPercent1(ratio: number): string {
+  return `${(ratio * 100).toFixed(1)}%`;
+}
+
+export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) {
+  const totals = rows.reduce(
+    (acc, { record }) => {
+      const workMin = calculateWorkMinutes({
+        clockIn: record?.clock_in ?? null,
+        clockOut: record?.clock_out ?? null,
+        breakStart: record?.break_start ?? null,
+        breakEnd: record?.break_end ?? null,
+      });
+      const ot = record
+        ? calculateOvertimeMinutes({
+            workDate: record.work_date,
+            dayCode: record.day_code,
+            clockIn: record.clock_in,
+            clockOut: record.clock_out,
+            breakStart: record.break_start,
+            breakEnd: record.break_end,
+          })
+        : 0;
+
+      acc.workMinutes += workMin;
+      acc.overtimeMinutes += ot;
+
+      return acc;
+    },
+    {
+      workMinutes: 0,
+      overtimeMinutes: 0,
+    },
+  );
+
+  const caps = getMonthlyStatutoryCaps(year, month);
+  const prev = prevMonth(year, month);
+  const next = nextMonth(year, month);
+  const today = getTodayYmdJapan();
+
+  let officeRatePlainWeekdayCount = 0;
+  let weekdayWorkDays = 0;
+  let weekdayOfficeDays = 0;
+  for (const { workDate, record } of rows) {
+    const dow = weekdayIndexJapan(workDate);
+    if (dow < 1 || dow > 5) continue;
+    if (isJapanPublicHoliday(workDate)) continue;
+
+    officeRatePlainWeekdayCount += 1;
+
+    if (!record?.clock_in || !record?.clock_out) continue;
+    weekdayWorkDays += 1;
+    if (record.commute_type === "出社") {
+      weekdayOfficeDays += 1;
+    }
+  }
+
+  const officeRateBaseline =
+    officeRatePlainWeekdayCount > 0 ? 8 / officeRatePlainWeekdayCount : null;
+  const officeRateActual =
+    weekdayWorkDays > 0 ? weekdayOfficeDays / weekdayWorkDays : null;
+
+  return (
+    <div className="w-full min-w-0 space-y-3">
+      <h2 className="text-center text-base font-bold sm:text-lg">{formatMonthTitle(year, month)}</h2>
+
+      <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-slate-300 bg-white shadow-sm">
+        <table className="w-full min-w-[720px] table-fixed border-collapse text-xs sm:text-sm">
+          <colgroup>
+            <col className="w-[6%]" />
+            <col className="w-[5%]" />
+            <col className="w-[7%]" />
+            <col className="w-[9%]" />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
+            <col className="w-[24%]" />
+            <col className="w-[12%]" />
+          </colgroup>
+          <thead>
+            <tr className="bg-indigo-950 text-white">
+              <th className="border border-indigo-900 px-1 py-2">日</th>
+              <th className="border border-indigo-900 px-1 py-2">曜</th>
+              <th className="border border-indigo-900 px-1 py-2">勤怠区分</th>
+              <th className="border border-indigo-900 px-1 py-2">出勤区分</th>
+              <th className="border border-indigo-900 px-1 py-2">出社</th>
+              <th className="border border-indigo-900 px-1 py-2">退社</th>
+              <th className="border border-indigo-900 px-1 py-2">休憩</th>
+              <th className="border border-indigo-900 px-1 py-2">勤務</th>
+              <th className="border border-indigo-900 px-1 py-2">残業</th>
+              <th className="border border-indigo-900 px-1 py-2">メモ</th>
+              <th className="border border-indigo-900 px-1 py-2">編集</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ workDate, record }) => {
+              const dow = weekdayIndexJapan(workDate);
+              const isWeekend = dow === 0 || dow === 6;
+              const isHoliday = isJapanPublicHoliday(workDate);
+              const highlightRow = isWeekend || isHoliday;
+              const workMin = calculateWorkMinutes({
+                clockIn: record?.clock_in ?? null,
+                clockOut: record?.clock_out ?? null,
+                breakStart: record?.break_start ?? null,
+                breakEnd: record?.break_end ?? null,
+              });
+              const brkMin = breakDurationMinutes(
+                record?.break_start ?? null,
+                record?.break_end ?? null,
+              );
+              const dayCell = formatDayCodeCell(record?.day_code);
+              const overtimeMin = record
+                ? calculateOvertimeMinutes({
+                    workDate: record.work_date,
+                    dayCode: record.day_code,
+                    clockIn: record.clock_in,
+                    clockOut: record.clock_out,
+                    breakStart: record.break_start,
+                    breakEnd: record.break_end,
+                  })
+                : 0;
+
+              return (
+                <tr
+                  key={workDate}
+                  className={highlightRow ? "bg-amber-100" : "bg-white"}
+                >
+                  <td className="border border-slate-200 px-1 py-1 text-center">
+                    {workDate.slice(5).replace("-", "/")}
+                  </td>
+                  <td className="border border-slate-200 px-1 py-1 text-center">
+                    {weekdayLabelJp(workDate)}
+                  </td>
+                  <td
+                    className={`border border-slate-200 px-1 py-1 text-center ${dayCell.className}`.trim()}
+                    title={dayCell.title}
+                  >
+                    {dayCell.text}
+                  </td>
+                  <td
+                    className={`border border-slate-200 px-1 py-1 text-center ${commuteTypeDisplayClassName(record?.commute_type)}`.trim()}
+                  >
+                    {record?.commute_type ?? ""}
+                  </td>
+                  <td className="border border-slate-200 px-1 py-1 text-center">
+                    {displayTime(record?.clock_in)}
+                  </td>
+                  <td className="border border-slate-200 px-1 py-1 text-center">
+                    {displayTime(record?.clock_out)}
+                  </td>
+                  <td className="border border-slate-200 px-1 py-1 text-center">
+                    {brkMin ? formatMinutes(brkMin) : ""}
+                  </td>
+                  <td className="border border-slate-200 px-1 py-1 text-center">
+                    {workMin ? formatMinutes(workMin) : ""}
+                  </td>
+                  <td className="border border-slate-200 px-1 py-1 text-center">
+                    {overtimeMin ? formatMinutes(overtimeMin) : ""}
+                  </td>
+                  <td className="border border-slate-200 px-1 py-1 text-left text-[11px] break-words text-slate-800">
+                    {memoShort(record?.memo ?? null)}
+                  </td>
+                  <td className="border border-slate-200 px-1 py-1 text-center">
+                    <Link
+                      href={`/record?date=${workDate}`}
+                      className="inline-block rounded bg-blue-600 px-2 py-1 text-[11px] font-medium text-white"
+                    >
+                      編集
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {showFillMissing ? (
+        <div className="w-full rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
+          <FillMonthButton year={year} month={month} />
+        </div>
+      ) : null}
+
+      <div className="w-full space-y-2 rounded-lg border bg-white p-3 text-xs sm:text-sm">
+        <p>勤務時間合計: {formatMinutes(totals.workMinutes)}</p>
+        <p>残業時間合計: {formatMinutes(totals.overtimeMinutes)}</p>
+        <p>
+          出社率実績:{" "}
+          {officeRateActual !== null
+            ? `${formatPercent1(officeRateActual)}（祝日を除く平日 出社 ${weekdayOfficeDays}日 / 勤務 ${weekdayWorkDays}日）`
+            : "—（祝日を除く平日に勤務なし）"}
+        </p>
+        <p className="border-t border-slate-200 pt-2 text-[11px] text-slate-600">
+          月内の月曜〜金曜の日数（祝日が月〜金にあっても含む）: {caps.weekdayCount}日 × 8時間
+        </p>
+        <p>法定労働時間: {formatMinutes(caps.legalMinutes)}</p>
+        <p>目標勤務時間: {formatMinutes(caps.goalMinutes)}（法定 + 30時間）</p>
+        <p>36協定勤務時間: {formatMinutes(caps.article36Minutes)}（法定 + 45時間）</p>
+        <p>労働基準法勤務時間: {formatMinutes(caps.laborStandardsMinutes)}（法定 + 80時間）</p>
+        <p>
+          出社率基準値:{" "}
+          {officeRateBaseline !== null
+            ? `${formatPercent1(officeRateBaseline)}（8 ÷ 祝日を除く平日 ${officeRatePlainWeekdayCount}日）`
+            : "—"}
+        </p>
+      </div>
+
+      <nav className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 border-t pt-3 text-sm">
+        <Link
+          href={`/?year=${prev.year}&month=${prev.month}`}
+          className="rounded-lg border bg-white px-3 py-2 hover:bg-slate-50"
+        >
+          前の月
+        </Link>
+        <Link
+          href={`/?year=${today.year}&month=${today.month}`}
+          className="rounded-lg border bg-white px-3 py-2 hover:bg-slate-50"
+        >
+          当月
+        </Link>
+        <Link
+          href={`/?year=${next.year}&month=${next.month}`}
+          className="rounded-lg border bg-white px-3 py-2 hover:bg-slate-50"
+        >
+          次の月
+        </Link>
+      </nav>
+    </div>
+  );
+}

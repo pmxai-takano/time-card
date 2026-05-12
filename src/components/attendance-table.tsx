@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { commuteTypeDisplayClassName } from "@/lib/commute-types";
+import { formatDayCodeCell } from "@/lib/day-codes";
 import { AttendanceRecord } from "@/types/attendance";
 import { calculateWorkMinutes, formatMinutes } from "@/lib/time";
 
@@ -17,6 +19,8 @@ export function AttendanceTable({ records }: Props) {
         <thead className="bg-slate-100 text-left">
           <tr>
             <th className="px-3 py-2">勤務日</th>
+            <th className="px-3 py-2">勤怠区分</th>
+            <th className="px-3 py-2">出勤区分</th>
             <th className="px-3 py-2">出勤</th>
             <th className="px-3 py-2">退勤</th>
             <th className="px-3 py-2">休憩</th>
@@ -27,6 +31,7 @@ export function AttendanceTable({ records }: Props) {
         </thead>
         <tbody>
           {records.map((record) => {
+            const dayCell = formatDayCodeCell(record.day_code);
             const workMinutes = calculateWorkMinutes({
               clockIn: record.clock_in,
               clockOut: record.clock_out,
@@ -36,6 +41,12 @@ export function AttendanceTable({ records }: Props) {
             return (
               <tr key={record.id} className="border-t">
                 <td className="px-3 py-2">{record.work_date}</td>
+                <td className={`px-3 py-2 ${dayCell.className}`.trim()} title={dayCell.title || undefined}>
+                  {dayCell.text || record.day_code || "-"}
+                </td>
+                <td className={`px-3 py-2 ${commuteTypeDisplayClassName(record.commute_type)}`.trim()}>
+                  {record.commute_type ?? "-"}
+                </td>
                 <td className="px-3 py-2">{displayTime(record.clock_in)}</td>
                 <td className="px-3 py-2">{displayTime(record.clock_out)}</td>
                 <td className="px-3 py-2">
@@ -45,7 +56,7 @@ export function AttendanceTable({ records }: Props) {
                 <td className="px-3 py-2">{record.memo || "-"}</td>
                 <td className="px-3 py-2">
                   <Link
-                    href={`/?date=${record.work_date}`}
+                    href={`/record?date=${record.work_date}`}
                     className="rounded bg-blue-50 px-2 py-1 text-blue-700"
                   >
                     編集
