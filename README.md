@@ -51,6 +51,7 @@ time-card/
     migration_timesheet_columns.sql
     migration_commute_type.sql
     migration_attendance_defaults.sql
+    migration_break2.sql
   middleware.ts
   .env.example
 ```
@@ -99,6 +100,8 @@ npm run dev
 
 平日デフォルトと一括登録用に `supabase/migration_attendance_defaults.sql` を実行してください（`attendance_defaults` テーブルと RLS）。**新規に更新後の `schema.sql` と `rls.sql` を流した場合はこのマイグレーションは不要**です（テーブル定義が重複するため）。
 
+2つ目の休憩用に `supabase/migration_break2.sql` を実行してください（`break2_start` / `break2_end` 列）。個別編集画面でのみ入力でき、勤務表の「休憩」列は2組の合計分数を表示します。
+
 ## 6) RLS設定SQL
 
 `supabase/rls.sql` を SQL Editor で実行してください。
@@ -108,7 +111,7 @@ npm run dev
 - `/login` : メールログイン（Magic Link）
 - `/` : 月次勤務表（全日付行・フッターに勤務・残業などの合計・前月/次月ナビ）。**当月表示時のみ**「当月の空白を初期値で埋める」で、土日祝を除く平日かつ未登録日にだけ行を追加
 - `/settings` : 平日デフォルト（出退勤・休憩・勤怠区分・出勤区分）。一括登録と保存用
-- `/record?date=YYYY-MM-DD` : 1日分の編集（保存は従来どおり upsert）
+- `/record?date=YYYY-MM-DD` : 1日分の編集（保存は従来どおり upsert）。休憩は最大2組まで入力可能（勤務表は合算表示）
 - `/records` : 当月の勤務表（`/`）へリダイレクト
 - `/summary` : 勤務表（`/`）へリダイレクトのみ（ブックマーク等の旧 URL 用。月別集計画面はありません）
 

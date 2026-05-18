@@ -41,7 +41,7 @@ export default async function RecordPage({ searchParams }: Props) {
   const { year: backYear, month: backMonth } = parseYearMonth(String(y), String(m));
 
   return (
-    <main className="mx-auto w-full max-w-2xl space-y-4 p-4">
+    <main className="mx-auto w-full min-w-0 max-w-2xl space-y-4 overflow-x-hidden p-4">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-bold">勤怠編集</h1>
         <LogoutButton />

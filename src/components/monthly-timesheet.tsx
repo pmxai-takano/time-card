@@ -14,10 +14,10 @@ import { formatDayCodeCell } from "@/lib/day-codes";
 import { FillMonthButton } from "@/components/fill-month-button";
 import { AttendanceRecord } from "@/types/attendance";
 import {
-  breakDurationMinutes,
   calculateOvertimeMinutes,
   calculateWorkMinutes,
   formatMinutes,
+  totalBreakDurationMinutes,
 } from "@/lib/time";
 
 export type MonthlyTimesheetRow = {
@@ -55,6 +55,8 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
         clockOut: record?.clock_out ?? null,
         breakStart: record?.break_start ?? null,
         breakEnd: record?.break_end ?? null,
+        break2Start: record?.break2_start ?? null,
+        break2End: record?.break2_end ?? null,
         workDate: record?.work_date ?? workDate,
       });
       const ot = record
@@ -65,6 +67,8 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
             clockOut: record.clock_out,
             breakStart: record.break_start,
             breakEnd: record.break_end,
+            break2Start: record.break2_start ?? null,
+            break2End: record.break2_end ?? null,
           })
         : 0;
 
@@ -151,11 +155,13 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
                 clockOut: record?.clock_out ?? null,
                 breakStart: record?.break_start ?? null,
                 breakEnd: record?.break_end ?? null,
+                break2Start: record?.break2_start ?? null,
+                break2End: record?.break2_end ?? null,
                 workDate: record?.work_date ?? workDate,
               });
-              const brkMin = breakDurationMinutes(
-                record?.break_start ?? null,
-                record?.break_end ?? null,
+              const brkMin = totalBreakDurationMinutes(
+                { start: record?.break_start ?? null, end: record?.break_end ?? null },
+                { start: record?.break2_start ?? null, end: record?.break2_end ?? null },
               );
               const dayCell = formatDayCodeCell(record?.day_code);
               const overtimeMin = record
@@ -166,6 +172,8 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
                     clockOut: record.clock_out,
                     breakStart: record.break_start,
                     breakEnd: record.break_end,
+                    break2Start: record.break2_start ?? null,
+                    break2End: record.break2_end ?? null,
                   })
                 : 0;
 

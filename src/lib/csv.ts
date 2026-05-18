@@ -2,10 +2,10 @@ import { weekdayLabelJp } from "@/lib/calendar-jp";
 import { formatDayCodeForCsv } from "@/lib/day-codes";
 import { AttendanceRecord } from "@/types/attendance";
 import {
-  breakDurationMinutes,
   calculateOvertimeMinutes,
   calculateWorkMinutes,
   formatMinutes,
+  totalBreakDurationMinutes,
 } from "@/lib/time";
 
 function escapeCsv(value: string): string {
@@ -29,6 +29,8 @@ export function buildAttendanceCsv(records: AttendanceRecord[]): string {
     "退勤",
     "休憩開始",
     "休憩終了",
+    "休憩2開始",
+    "休憩2終了",
     "休憩時間",
     "勤務時間",
     "残業",
@@ -41,9 +43,14 @@ export function buildAttendanceCsv(records: AttendanceRecord[]): string {
       clockOut: record.clock_out,
       breakStart: record.break_start,
       breakEnd: record.break_end,
+      break2Start: record.break2_start ?? null,
+      break2End: record.break2_end ?? null,
       workDate: record.work_date,
     });
-    const breakMin = breakDurationMinutes(record.break_start, record.break_end);
+    const breakMin = totalBreakDurationMinutes(
+      { start: record.break_start, end: record.break_end },
+      { start: record.break2_start ?? null, end: record.break2_end ?? null },
+    );
     const overtimeMin = calculateOvertimeMinutes({
       workDate: record.work_date,
       dayCode: record.day_code,
@@ -51,6 +58,8 @@ export function buildAttendanceCsv(records: AttendanceRecord[]): string {
       clockOut: record.clock_out,
       breakStart: record.break_start,
       breakEnd: record.break_end,
+      break2Start: record.break2_start ?? null,
+      break2End: record.break2_end ?? null,
     });
 
     return [
@@ -62,6 +71,8 @@ export function buildAttendanceCsv(records: AttendanceRecord[]): string {
       displayTime(record.clock_out),
       displayTime(record.break_start),
       displayTime(record.break_end),
+      displayTime(record.break2_start ?? null),
+      displayTime(record.break2_end ?? null),
       formatMinutes(breakMin),
       formatMinutes(workMinutes),
       formatMinutes(overtimeMin),

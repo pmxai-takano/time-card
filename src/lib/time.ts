@@ -61,9 +61,11 @@ export function calculateWorkMinutes(params: {
   clockOut: string | null;
   breakStart: string | null;
   breakEnd: string | null;
+  break2Start?: string | null;
+  break2End?: string | null;
   workDate?: string | null;
 }): number {
-  const { clockIn, clockOut, breakStart, breakEnd } = params;
+  const { clockIn, clockOut, breakStart, breakEnd, break2Start, break2End } = params;
 
   if (!clockIn || !clockOut) {
     return 0;
@@ -76,6 +78,9 @@ export function calculateWorkMinutes(params: {
   if (breakStart && breakEnd) {
     total -= breakOverlapWithShift(inAbs, outAbs, breakStart, breakEnd);
   }
+  if (break2Start && break2End) {
+    total -= breakOverlapWithShift(inAbs, outAbs, break2Start, break2End);
+  }
 
   return Math.max(0, total);
 }
@@ -86,6 +91,15 @@ export function formatMinutes(minutes: number): string {
   return `${h}:${String(m).padStart(2, "0")}`;
 }
 
+/** 複数休憩の表示用合計（各ペアの長さの単純合算） */
+export function totalBreakDurationMinutes(
+  ...pairs: Array<{ start: string | null; end: string | null }>
+): number {
+  return pairs.reduce(
+    (sum, { start, end }) => sum + breakDurationMinutes(start, end),
+    0,
+  );
+}
 /** 休憩開始・終了から休憩分数（日をまたぐ休憩は +1440 して長さを算出） */
 export function breakDurationMinutes(
   breakStart: string | null,
@@ -132,6 +146,8 @@ function overtimeMinutesAfter18(
   clockOut: string,
   breakStart: string | null,
   breakEnd: string | null,
+  break2Start: string | null = null,
+  break2End: string | null = null,
 ): number {
   const inAbs = toMinutesHm(clockIn);
   const outAbs = absoluteShiftEnd(inAbs, toMinutesHm(clockOut));
@@ -151,6 +167,16 @@ function overtimeMinutesAfter18(
         outAbs,
         breakStart,
         breakEnd,
+        seg0,
+        seg1,
+      );
+    }
+    if (break2Start && break2End) {
+      len -= breakOverlapWithEveningSegment(
+        inAbs,
+        outAbs,
+        break2Start,
+        break2End,
         seg0,
         seg1,
       );
@@ -176,13 +202,18 @@ export function calculateOvertimeMinutes(params: {
   clockOut: string | null;
   breakStart: string | null;
   breakEnd: string | null;
+  break2Start?: string | null;
+  break2End?: string | null;
 }): number {
-  const { workDate, dayCode, clockIn, clockOut, breakStart, breakEnd } = params;
+  const { workDate, dayCode, clockIn, clockOut, breakStart, breakEnd, break2Start, break2End } =
+    params;
   const net = calculateWorkMinutes({
     clockIn,
     clockOut,
     breakStart,
     breakEnd,
+    break2Start,
+    break2End,
     workDate,
   });
   if (net <= 0) return 0;
@@ -193,7 +224,14 @@ export function calculateOvertimeMinutes(params: {
 
   if (dayCode === "前") {
     if (!clockIn || !clockOut) return 0;
-    return overtimeMinutesAfter18(clockIn, clockOut, breakStart, breakEnd);
+    return overtimeMinutesAfter18(
+      clockIn,
+      clockOut,
+      breakStart,
+      breakEnd,
+      break2Start ?? null,
+      break2End ?? null,
+    );
   }
 
   if (dayCode === "後") {

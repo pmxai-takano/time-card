@@ -37,6 +37,8 @@ export function AttendanceTable({ records }: Props) {
               clockOut: record.clock_out,
               breakStart: record.break_start,
               breakEnd: record.break_end,
+              break2Start: record.break2_start ?? null,
+              break2End: record.break2_end ?? null,
               workDate: record.work_date,
             });
             return (

@@ -8,3 +8,11 @@
 body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* date/time inputs have a large intrinsic width on mobile; keep them inside the card */
+input[type="date"],
+input[type="time"] {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}

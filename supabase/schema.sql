@@ -8,6 +8,8 @@ create table if not exists public.attendance_records (
   clock_out time,
   break_start time,
   break_end time,
+  break2_start time,
+  break2_end time,
   memo text,
   day_code text,
   commute_type text,

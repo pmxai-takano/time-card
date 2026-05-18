@@ -15,6 +15,30 @@ type Props = {
   initialValue: AttendanceInput;
 };
 
+const fieldLabelClass = "block min-w-0 text-sm";
+const dateTimeInputClass =
+  "mt-1 block w-full min-w-0 max-w-full box-border rounded-md border px-2 py-2 text-base sm:px-3";
+const textInputClass =
+  "mt-1 block w-full min-w-0 max-w-full box-border rounded-md border px-2 py-2 sm:px-3";
+
+function TimeInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <input
+      type="time"
+      className={dateTimeInputClass}
+      value={value}
+      onChange={(event) => onChange(event.currentTarget.value)}
+      onInput={(event) => onChange(event.currentTarget.value)}
+    />
+  );
+}
+
 export function AttendanceForm({ initialValue }: Props) {
   const [form, setForm] = useState<AttendanceInput>(initialValue);
   const [message, setMessage] = useState<string>("");
@@ -28,6 +52,8 @@ export function AttendanceForm({ initialValue }: Props) {
           clockOut: form.clock_out || null,
           breakStart: form.break_start || null,
           breakEnd: form.break_end || null,
+          break2Start: form.break2_start || null,
+          break2End: form.break2_end || null,
           workDate: form.work_date,
         }),
       ),
@@ -44,6 +70,8 @@ export function AttendanceForm({ initialValue }: Props) {
           clockOut: form.clock_out || null,
           breakStart: form.break_start || null,
           breakEnd: form.break_end || null,
+          break2Start: form.break2_start || null,
+          break2End: form.break2_end || null,
         }),
       ),
     [form],
@@ -61,6 +89,16 @@ export function AttendanceForm({ initialValue }: Props) {
 
   function updateField<K extends keyof AttendanceInput>(key: K, value: AttendanceInput[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function resetBreakTimes() {
+    setForm((prev) => ({
+      ...prev,
+      break_start: "",
+      break_end: "",
+      break2_start: "",
+      break2_end: "",
+    }));
   }
 
   function validateTime(value: string): boolean {
@@ -85,7 +123,9 @@ export function AttendanceForm({ initialValue }: Props) {
       validateTime(form.clock_in) &&
       validateTime(form.clock_out) &&
       validateTime(form.break_start) &&
-      validateTime(form.break_end);
+      validateTime(form.break_end) &&
+      validateTime(form.break2_start) &&
+      validateTime(form.break2_end);
 
     if (!valid) {
       setMessage("時刻は HH:mm 形式で入力してください。");
@@ -107,26 +147,29 @@ export function AttendanceForm({ initialValue }: Props) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6 rounded-xl border bg-white p-4 shadow-sm">
+    <form
+      onSubmit={onSubmit}
+      className="min-w-0 space-y-6 overflow-hidden rounded-xl border bg-white p-4 shadow-sm"
+    >
       <h2 className="text-lg font-semibold">勤怠入力</h2>
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-700">基本</h3>
-        <div className="grid grid-cols-1 gap-3">
-          <label className="text-sm">
+        <div className="grid min-w-0 grid-cols-1 gap-3">
+          <label className={fieldLabelClass}>
             勤務日
             <input
               type="date"
-              className="mt-1 w-full rounded-md border px-3 py-2"
+              className={dateTimeInputClass}
               value={form.work_date}
               onChange={(event) => updateField("work_date", event.target.value)}
               required
             />
           </label>
-          <label className="text-sm">
+          <label className={fieldLabelClass}>
             勤怠区分
             <select
-              className="mt-1 w-full rounded-md border px-3 py-2"
+              className={textInputClass}
               value={form.day_code}
               onChange={(event) => updateField("day_code", event.target.value)}
             >
@@ -137,10 +180,10 @@ export function AttendanceForm({ initialValue }: Props) {
               ))}
             </select>
           </label>
-          <label className="text-sm">
+          <label className={fieldLabelClass}>
             出勤区分
             <select
-              className="mt-1 w-full rounded-md border px-3 py-2"
+              className={textInputClass}
               value={form.commute_type}
               onChange={(event) => updateField("commute_type", event.target.value)}
             >
@@ -151,46 +194,60 @@ export function AttendanceForm({ initialValue }: Props) {
               ))}
             </select>
           </label>
-          <label className="text-sm">
+          <label className={fieldLabelClass}>
             出勤時刻（HH:mm）
-            <input
-              type="time"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-              value={form.clock_in}
-              onChange={(event) => updateField("clock_in", event.target.value)}
-            />
+            <TimeInput value={form.clock_in} onChange={(value) => updateField("clock_in", value)} />
           </label>
-          <label className="text-sm">
+          <label className={fieldLabelClass}>
             退勤時刻（HH:mm）
-            <input
-              type="time"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-              value={form.clock_out}
-              onChange={(event) => updateField("clock_out", event.target.value)}
-            />
+            <TimeInput value={form.clock_out} onChange={(value) => updateField("clock_out", value)} />
           </label>
-          <label className="text-sm">
-            休憩開始（HH:mm）
-            <input
-              type="time"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-              value={form.break_start}
-              onChange={(event) => updateField("break_start", event.target.value)}
-            />
-          </label>
-          <label className="text-sm">
-            休憩終了（HH:mm）
-            <input
-              type="time"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-              value={form.break_end}
-              onChange={(event) => updateField("break_end", event.target.value)}
-            />
-          </label>
-          <label className="text-sm">
+
+          <div className="min-w-0 space-y-3 rounded-md border border-slate-200 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-slate-700">休憩時間</span>
+              <button
+                type="button"
+                className="shrink-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                onClick={resetBreakTimes}
+              >
+                リセット
+              </button>
+            </div>
+            <label className={fieldLabelClass}>
+              休憩開始（HH:mm）
+              <TimeInput
+                value={form.break_start}
+                onChange={(value) => updateField("break_start", value)}
+              />
+            </label>
+            <label className={fieldLabelClass}>
+              休憩終了（HH:mm）
+              <TimeInput
+                value={form.break_end}
+                onChange={(value) => updateField("break_end", value)}
+              />
+            </label>
+            <label className={fieldLabelClass}>
+              休憩2開始（HH:mm）
+              <TimeInput
+                value={form.break2_start}
+                onChange={(value) => updateField("break2_start", value)}
+              />
+            </label>
+            <label className={fieldLabelClass}>
+              休憩2終了（HH:mm）
+              <TimeInput
+                value={form.break2_end}
+                onChange={(value) => updateField("break2_end", value)}
+              />
+            </label>
+          </div>
+
+          <label className={fieldLabelClass}>
             メモ
             <textarea
-              className="mt-1 w-full rounded-md border px-3 py-2"
+              className={textInputClass}
               value={form.memo}
               onChange={(event) => updateField("memo", event.target.value)}
               rows={3}

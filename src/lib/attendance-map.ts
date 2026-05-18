@@ -15,6 +15,8 @@ export function recordToInput(
     clock_out: toInputTime(record?.clock_out ?? null),
     break_start: toInputTime(record?.break_start ?? null),
     break_end: toInputTime(record?.break_end ?? null),
+    break2_start: toInputTime(record?.break2_start ?? null),
+    break2_end: toInputTime(record?.break2_end ?? null),
     memo: record?.memo ?? "",
     day_code: record?.day_code ?? "",
     commute_type: record?.commute_type ?? "",

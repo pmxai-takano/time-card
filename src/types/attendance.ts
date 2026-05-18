@@ -6,6 +6,8 @@ export type AttendanceRecord = {
   clock_out: string | null;
   break_start: string | null;
   break_end: string | null;
+  break2_start?: string | null;
+  break2_end?: string | null;
   memo: string | null;
   day_code: string | null;
   /** 出勤区分（未マイグレーションの行では欠けることがある） */
@@ -28,6 +30,8 @@ export type AttendanceInput = {
   clock_out: string;
   break_start: string;
   break_end: string;
+  break2_start: string;
+  break2_end: string;
   memo: string;
   day_code: string;
   commute_type: string;
