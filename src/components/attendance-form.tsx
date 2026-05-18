@@ -91,9 +91,13 @@ export function AttendanceForm({ initialValue }: Props) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function resetBreakTimes() {
+  function resetAttendanceFields() {
     setForm((prev) => ({
       ...prev,
+      day_code: "",
+      commute_type: "",
+      clock_in: "",
+      clock_out: "",
       break_start: "",
       break_end: "",
       break2_start: "",
@@ -154,7 +158,16 @@ export function AttendanceForm({ initialValue }: Props) {
       <h2 className="text-lg font-semibold">勤怠入力</h2>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-slate-700">基本</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-700">基本</h3>
+          <button
+            type="button"
+            className="shrink-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+            onClick={resetAttendanceFields}
+          >
+            リセット
+          </button>
+        </div>
         <div className="grid min-w-0 grid-cols-1 gap-3">
           <label className={fieldLabelClass}>
             勤務日
@@ -204,16 +217,7 @@ export function AttendanceForm({ initialValue }: Props) {
           </label>
 
           <div className="min-w-0 space-y-3 rounded-md border border-slate-200 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-slate-700">休憩時間</span>
-              <button
-                type="button"
-                className="shrink-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                onClick={resetBreakTimes}
-              >
-                リセット
-              </button>
-            </div>
+            <span className="block text-sm font-semibold text-slate-700">休憩時間</span>
             <label className={fieldLabelClass}>
               休憩開始（HH:mm）
               <TimeInput
