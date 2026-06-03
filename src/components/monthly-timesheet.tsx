@@ -38,11 +38,6 @@ function displayTime(value: string | null | undefined): string {
   return value.slice(0, 5);
 }
 
-function memoShort(memo: string | null | undefined): string {
-  if (!memo) return "";
-  return memo.length > 10 ? `${memo.slice(0, 10)}…` : memo;
-}
-
 function formatPercent1(ratio: number): string {
   return `${(ratio * 100).toFixed(1)}%`;
 }
@@ -214,8 +209,12 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
                   <td className="border border-slate-200 px-1 py-1 text-center">
                     {overtimeMin ? formatMinutes(overtimeMin) : ""}
                   </td>
-                  <td className="border border-slate-200 px-1 py-1 text-left text-[11px] break-words text-slate-800">
-                    {memoShort(record?.memo ?? null)}
+                  <td className="max-w-0 min-w-[30ch] border border-slate-200 px-1 py-1 text-left text-[11px] text-slate-800">
+                    {record?.memo ? (
+                      <span className="block truncate" title={record.memo}>
+                        {record.memo}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="border border-slate-200 px-1 py-1 text-center">
                     <Link
