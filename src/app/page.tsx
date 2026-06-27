@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { MonthlyTimesheet } from "@/components/monthly-timesheet";
 import { LogoutButton } from "@/components/logout-button";
 import {
-  getTodayYmdJapan,
+  isFillableMonth,
   listWorkDatesInMonth,
   parseYearMonth,
 } from "@/lib/calendar-jp";
@@ -48,8 +48,7 @@ export default async function Home({ searchParams }: Props) {
     record: map.get(workDate) ?? null,
   }));
 
-  const today = getTodayYmdJapan();
-  const showFillMissing = year === today.year && month === today.month;
+  const showFillMissing = isFillableMonth(year, month);
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-4 px-2 py-3 sm:px-4 sm:py-4">

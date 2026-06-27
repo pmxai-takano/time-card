@@ -115,6 +115,14 @@ export function nextMonth(year: number, month: number): { year: number; month: n
   return { year, month: month + 1 };
 }
 
+/** 一括初期入力が許可される月（当月・来月）か */
+export function isFillableMonth(year: number, month: number): boolean {
+  const today = getTodayYmdJapan();
+  if (year === today.year && month === today.month) return true;
+  const next = nextMonth(today.year, today.month);
+  return year === next.year && month === next.month;
+}
+
 export function formatMonthTitle(year: number, month: number): string {
   const last = daysInMonth(year, month);
   const mm = String(month).padStart(2, "0");

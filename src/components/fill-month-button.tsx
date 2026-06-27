@@ -1,5 +1,6 @@
 "use client";
 
+import { getTodayYmdJapan, nextMonth } from "@/lib/calendar-jp";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -7,6 +8,16 @@ type Props = {
   year: number;
   month: number;
 };
+
+function fillButtonLabel(year: number, month: number, isPending: boolean): string {
+  if (isPending) return "登録中…";
+  const today = getTodayYmdJapan();
+  const next = nextMonth(today.year, today.month);
+  if (year === next.year && month === next.month) {
+    return "来月の空白を初期値で埋める";
+  }
+  return "当月の空白を初期値で埋める";
+}
 
 export function FillMonthButton({ year, month }: Props) {
   const router = useRouter();
@@ -37,7 +48,7 @@ export function FillMonthButton({ year, month }: Props) {
         disabled={isPending}
         className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-950 hover:bg-indigo-100 disabled:opacity-50"
       >
-        {isPending ? "登録中…" : "当月の空白を初期値で埋める"}
+        {fillButtonLabel(year, month, isPending)}
       </button>
       <p className="text-[11px] text-slate-600">
         土日祝を除く平日で、まだ行がない日だけを設定画面のデフォルトで追加します（既存の行は変更しません）。

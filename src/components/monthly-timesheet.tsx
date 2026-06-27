@@ -29,7 +29,7 @@ type Props = {
   year: number;
   month: number;
   rows: MonthlyTimesheetRow[];
-  /** 日本時間の「当月」表示中のみ true（一括登録ボタン用） */
+  /** 日本時間の当月・来月表示中のみ true（一括登録ボタン用） */
   showFillMissing?: boolean;
 };
 

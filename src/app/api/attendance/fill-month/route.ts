@@ -6,7 +6,7 @@ import {
   parseDayCodeForDb,
 } from "@/lib/attendance-fields";
 import {
-  getTodayYmdJapan,
+  isFillableMonth,
   isJapanPublicHoliday,
   listWorkDatesInMonth,
   weekdayIndexJapan,
@@ -33,10 +33,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "year / month が不正です。" }, { status: 400 });
   }
 
-  const today = getTodayYmdJapan();
-  if (year !== today.year || month !== today.month) {
+  if (!isFillableMonth(year, month)) {
     return NextResponse.json(
-      { message: "一括登録は当月の勤務表からのみ実行できます。" },
+      { message: "一括登録は当月・来月の勤務表からのみ実行できます。" },
       { status: 400 },
     );
   }
