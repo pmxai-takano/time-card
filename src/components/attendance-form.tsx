@@ -2,17 +2,19 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { COMMUTE_TYPE_OPTIONS } from "@/lib/commute-types";
-import { ALLOWED_DAY_CODES, DAY_CODE_OPTIONS } from "@/lib/day-codes";
+import { ALLOWED_DAY_CODES, dayCodeOptionsForWorkSystem } from "@/lib/day-codes";
 import {
-  calculateOvertimeMinutes,
+  calculateAttendanceBreakdown,
   calculateWorkMinutes,
   formatMinutes,
   isValidTime,
 } from "@/lib/time";
+import type { WorkSystem } from "@/lib/work-system";
 import { AttendanceInput } from "@/types/attendance";
 
 type Props = {
   initialValue: AttendanceInput;
+  workSystem?: WorkSystem;
 };
 
 const fieldLabelClass = "block min-w-0 text-sm";
@@ -39,10 +41,11 @@ function TimeInput({
   );
 }
 
-export function AttendanceForm({ initialValue }: Props) {
+export function AttendanceForm({ initialValue, workSystem = "standard" }: Props) {
   const [form, setForm] = useState<AttendanceInput>(initialValue);
   const [message, setMessage] = useState<string>("");
   const [isPending, startTransition] = useTransition();
+  const isDiscretionary = workSystem === "discretionary";
 
   const workTime = useMemo(
     () =>
@@ -60,32 +63,39 @@ export function AttendanceForm({ initialValue }: Props) {
     [form],
   );
 
-  const overtimePreview = useMemo(
+  const breakdown = useMemo(
     () =>
-      formatMinutes(
-        calculateOvertimeMinutes({
-          workDate: form.work_date,
-          dayCode: form.day_code.trim() || null,
-          clockIn: form.clock_in || null,
-          clockOut: form.clock_out || null,
-          breakStart: form.break_start || null,
-          breakEnd: form.break_end || null,
-          break2Start: form.break2_start || null,
-          break2End: form.break2_end || null,
-        }),
-      ),
-    [form],
+      calculateAttendanceBreakdown({
+        workSystem,
+        workDate: form.work_date,
+        dayCode: form.day_code.trim() || null,
+        clockIn: form.clock_in || null,
+        clockOut: form.clock_out || null,
+        breakStart: form.break_start || null,
+        breakEnd: form.break_end || null,
+        break2Start: form.break2_start || null,
+        break2End: form.break2_end || null,
+      }),
+    [form, workSystem],
+  );
+
+  const overtimePreview = formatMinutes(breakdown.overtimeMinutes);
+  const holidayWorkPreview = formatMinutes(breakdown.holidayWorkMinutes);
+
+  const baseDayOptions = useMemo(
+    () => dayCodeOptionsForWorkSystem(workSystem),
+    [workSystem],
   );
 
   const dayCodeSelectOptions = useMemo(() => {
     const v = form.day_code.trim();
-    if (!v || ALLOWED_DAY_CODES.has(v)) return DAY_CODE_OPTIONS;
+    if (!v || ALLOWED_DAY_CODES.has(v)) return baseDayOptions;
     return [
       { value: "", label: "（未選択）" },
       { value: v, label: `${v}（旧データ・保存時は勤怠区分を選び直してください）` },
-      ...DAY_CODE_OPTIONS.filter((o) => o.value !== ""),
+      ...baseDayOptions.filter((o) => o.value !== ""),
     ];
-  }, [form.day_code]);
+  }, [form.day_code, baseDayOptions]);
 
   function updateField<K extends keyof AttendanceInput>(key: K, value: AttendanceInput[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -268,8 +278,16 @@ export function AttendanceForm({ initialValue }: Props) {
         <p>
           残業時間（自動計算・保存時に反映）: <span className="font-semibold">{overtimePreview}</span>
         </p>
+        {isDiscretionary ? (
+          <p>
+            休日出勤（自動計算・保存時に反映）:{" "}
+            <span className="font-semibold">{holidayWorkPreview}</span>
+          </p>
+        ) : null}
         <p className="text-xs text-slate-600">
-          平日は定時8時間超が残業。土日祝は全日残業。「前」は18時以降、「後」は3時間超過分。「残」は全日残業扱いです。
+          {isDiscretionary
+            ? "裁量労働制: 平日は8時間超が残業。土日祝・「残」は休日出勤。平日かつ1時間以上勤務で勤怠区分を「勤」にします（有・特・リ・残は維持）。"
+            : "平日は定時8時間超が残業。土日祝は全日残業。「前」は18時以降、「後」は3時間超過分。「残」は全日残業扱いです。"}
         </p>
       </div>
 

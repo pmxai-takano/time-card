@@ -5,9 +5,11 @@ import {
   parseCommuteTypeForDb,
   parseDayCodeForDb,
 } from "@/lib/attendance-fields";
-import { calculateOvertimeMinutes } from "@/lib/time";
+import { calculateAttendanceBreakdown } from "@/lib/time";
+import { parseWorkSystem, resolveDayCodeForSave } from "@/lib/work-system";
 
 const TABLE = "attendance_records";
+const DEFAULTS = "attendance_defaults";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -32,7 +34,7 @@ export async function POST(request: Request) {
   if (!parsedDayCode.ok) {
     return NextResponse.json({ message: parsedDayCode.message }, { status: 400 });
   }
-  const dayCode = parsedDayCode.dayCode;
+  let dayCode = parsedDayCode.dayCode;
 
   const parsedCommute = parseCommuteTypeForDb(body.commute_type);
   if (!parsedCommute.ok) {
@@ -62,7 +64,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "休憩2終了時刻の形式が不正です。" }, { status: 400 });
   }
 
-  const overtimeMinutes = calculateOvertimeMinutes({
+  const { data: defRow } = await supabase
+    .from(DEFAULTS)
+    .select("work_system")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const workSystem = parseWorkSystem(defRow?.work_system);
+
+  const prelim = calculateAttendanceBreakdown({
+    workSystem,
+    workDate,
+    dayCode,
+    clockIn,
+    clockOut,
+    breakStart,
+    breakEnd,
+    break2Start,
+    break2End,
+  });
+
+  dayCode = resolveDayCodeForSave({
+    workSystem,
+    workDate,
+    dayCode,
+    workMinutes: prelim.workMinutes,
+  });
+
+  const { overtimeMinutes, holidayWorkMinutes } = calculateAttendanceBreakdown({
+    workSystem,
     workDate,
     dayCode,
     clockIn,
@@ -87,6 +116,7 @@ export async function POST(request: Request) {
       day_code: dayCode,
       commute_type: commuteType,
       overtime_minutes: overtimeMinutes,
+      holiday_work_minutes: holidayWorkMinutes,
       night_minutes: 0,
       paid_leave_days: 0,
       summer_leave_days: 0,

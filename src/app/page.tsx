@@ -8,6 +8,7 @@ import {
   parseYearMonth,
 } from "@/lib/calendar-jp";
 import { createClient } from "@/lib/supabase/server";
+import { parseWorkSystem } from "@/lib/work-system";
 import { AttendanceRecord } from "@/types/attendance";
 
 type Props = {
@@ -31,12 +32,21 @@ export default async function Home({ searchParams }: Props) {
   const start = dates[0];
   const end = dates[dates.length - 1];
 
-  const { data } = await supabase
-    .from("attendance_records")
-    .select("*")
-    .gte("work_date", start)
-    .lte("work_date", end)
-    .order("work_date", { ascending: true });
+  const [{ data }, { data: defaults }] = await Promise.all([
+    supabase
+      .from("attendance_records")
+      .select("*")
+      .gte("work_date", start)
+      .lte("work_date", end)
+      .order("work_date", { ascending: true }),
+    supabase
+      .from("attendance_defaults")
+      .select("work_system")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
+
+  const workSystem = parseWorkSystem(defaults?.work_system);
 
   const map = new Map<string, AttendanceRecord>();
   for (const row of (data ?? []) as AttendanceRecord[]) {
@@ -74,6 +84,7 @@ export default async function Home({ searchParams }: Props) {
         month={month}
         rows={rows}
         showFillMissing={showFillMissing}
+        workSystem={workSystem}
       />
     </main>
   );

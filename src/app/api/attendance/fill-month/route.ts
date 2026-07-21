@@ -11,7 +11,8 @@ import {
   listWorkDatesInMonth,
   weekdayIndexJapan,
 } from "@/lib/calendar-jp";
-import { calculateOvertimeMinutes } from "@/lib/time";
+import { calculateAttendanceBreakdown } from "@/lib/time";
+import { parseWorkSystem, resolveDayCodeForSave } from "@/lib/work-system";
 
 const RECORDS = "attendance_records";
 const DEFAULTS = "attendance_defaults";
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
     );
   }
 
+  const workSystem = parseWorkSystem(defRow.work_system);
   const clockIn = normalizeTimeForDb(String(defRow.weekday_clock_in ?? ""));
   const clockOut = normalizeTimeForDb(String(defRow.weekday_clock_out ?? ""));
   if (!clockIn || !clockOut) {
@@ -75,7 +77,6 @@ export async function POST(request: Request) {
   if (!parsedCom.ok) {
     return NextResponse.json({ message: parsedCom.message }, { status: 400 });
   }
-  const dayCode = parsedDay.dayCode;
   const commuteType = parsedCom.commuteType;
 
   if (defRow.weekday_break_start && !breakStart) {
@@ -108,7 +109,23 @@ export async function POST(request: Request) {
     if (dow < 1 || dow > 5) continue;
     if (isJapanPublicHoliday(workDate)) continue;
 
-    const overtimeMinutes = calculateOvertimeMinutes({
+    const prelim = calculateAttendanceBreakdown({
+      workSystem,
+      workDate,
+      dayCode: parsedDay.dayCode,
+      clockIn,
+      clockOut,
+      breakStart,
+      breakEnd,
+    });
+    const dayCode = resolveDayCodeForSave({
+      workSystem,
+      workDate,
+      dayCode: parsedDay.dayCode,
+      workMinutes: prelim.workMinutes,
+    });
+    const { overtimeMinutes, holidayWorkMinutes } = calculateAttendanceBreakdown({
+      workSystem,
       workDate,
       dayCode,
       clockIn,
@@ -128,6 +145,7 @@ export async function POST(request: Request) {
       day_code: dayCode,
       commute_type: commuteType,
       overtime_minutes: overtimeMinutes,
+      holiday_work_minutes: holidayWorkMinutes,
       night_minutes: 0,
       paid_leave_days: 0,
       summer_leave_days: 0,

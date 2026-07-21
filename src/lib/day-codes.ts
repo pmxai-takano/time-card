@@ -16,6 +16,9 @@ export const DAY_CODE_DEFINITIONS = [
   { code: "リ", label: "リフレッシュ休暇" },
 ] as const;
 
+/** 裁量労働制では半休（前・後）を使わない */
+const DISCRETIONARY_HIDDEN_CODES = new Set(["前", "後"]);
+
 /** 廃止コード（既存行の表示・CSV のみ） */
 const LEGACY_DAY_LABELS: Record<string, string> = {
   欠: "欠勤",
@@ -26,6 +29,20 @@ export const DAY_CODE_OPTIONS: DayCodeOption[] = [
   { value: "", label: "（未選択）" },
   ...DAY_CODE_DEFINITIONS.map((d) => ({ value: d.code, label: `${d.code}: ${d.label}` })),
 ];
+
+/** 勤務体系に応じた勤怠区分の選択肢 */
+export function dayCodeOptionsForWorkSystem(
+  workSystem: "standard" | "discretionary",
+): DayCodeOption[] {
+  if (workSystem !== "discretionary") return DAY_CODE_OPTIONS;
+  return [
+    { value: "", label: "（未選択）" },
+    ...DAY_CODE_DEFINITIONS.filter((d) => !DISCRETIONARY_HIDDEN_CODES.has(d.code)).map((d) => ({
+      value: d.code,
+      label: `${d.code}: ${d.label}`,
+    })),
+  ];
+}
 
 export const ALLOWED_DAY_CODES: Set<string> = new Set(
   DAY_CODE_DEFINITIONS.map((d) => d.code),

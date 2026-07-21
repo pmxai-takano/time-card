@@ -6,6 +6,7 @@ import {
   parseDayCodeForDb,
 } from "@/lib/attendance-fields";
 import { AttendanceDefaultsRecord } from "@/types/attendance-defaults";
+import { parseWorkSystem } from "@/lib/work-system";
 
 const TABLE = "attendance_defaults";
 
@@ -39,6 +40,7 @@ export async function PUT(request: Request) {
   }
 
   const body = await request.json();
+  const workSystem = parseWorkSystem(body.work_system);
   const clockIn = normalizeTimeForDb(String(body.weekday_clock_in ?? ""));
   const clockOut = normalizeTimeForDb(String(body.weekday_clock_out ?? ""));
   const breakStart = normalizeTimeForDb(String(body.weekday_break_start ?? ""));
@@ -69,6 +71,7 @@ export async function PUT(request: Request) {
   const { error } = await supabase.from(TABLE).upsert(
     {
       user_id: user.id,
+      work_system: workSystem,
       weekday_clock_in: clockIn,
       weekday_clock_out: clockOut,
       weekday_break_start: breakStart,

@@ -5,6 +5,7 @@ import { LogoutButton } from "@/components/logout-button";
 import { parseYearMonth } from "@/lib/calendar-jp";
 import { recordToInput } from "@/lib/attendance-map";
 import { createClient } from "@/lib/supabase/server";
+import { parseWorkSystem } from "@/lib/work-system";
 import { AttendanceRecord } from "@/types/attendance";
 
 type Props = {
@@ -28,13 +29,17 @@ export default async function RecordPage({ searchParams }: Props) {
     redirect("/login");
   }
 
-  const { data } = await supabase
-    .from("attendance_records")
-    .select("*")
-    .eq("work_date", workDate)
-    .maybeSingle();
+  const [{ data }, { data: defaults }] = await Promise.all([
+    supabase.from("attendance_records").select("*").eq("work_date", workDate).maybeSingle(),
+    supabase
+      .from("attendance_defaults")
+      .select("work_system")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
 
   const record = data as AttendanceRecord | null;
+  const workSystem = parseWorkSystem(defaults?.work_system);
   const parts = workDate.split("-");
   const y = Number(parts[0]);
   const m = Number(parts[1]);
@@ -59,7 +64,10 @@ export default async function RecordPage({ searchParams }: Props) {
         </Link>
       </nav>
 
-      <AttendanceForm initialValue={recordToInput(record, workDate)} />
+      <AttendanceForm
+        initialValue={recordToInput(record, workDate)}
+        workSystem={workSystem}
+      />
     </main>
   );
 }

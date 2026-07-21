@@ -14,6 +14,7 @@ create table if not exists public.attendance_records (
   day_code text,
   commute_type text,
   overtime_minutes integer not null default 0,
+  holiday_work_minutes integer not null default 0,
   night_minutes integer not null default 0,
   paid_leave_days numeric(4, 1) not null default 0,
   summer_leave_days numeric(4, 1) not null default 0,
@@ -47,6 +48,7 @@ execute function public.set_updated_at();
 -- 平日デフォルト勤怠（ユーザーごと1行）。RLS は rls.sql を実行してください。
 create table if not exists public.attendance_defaults (
   user_id uuid primary key references auth.users(id) on delete cascade,
+  work_system text not null default 'standard',
   weekday_clock_in time,
   weekday_clock_out time,
   weekday_break_start time,

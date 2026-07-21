@@ -14,11 +14,12 @@ import { formatDayCodeCell } from "@/lib/day-codes";
 import { FillMonthButton } from "@/components/fill-month-button";
 import { AttendanceRecord } from "@/types/attendance";
 import {
-  calculateOvertimeMinutes,
+  calculateAttendanceBreakdown,
   calculateWorkMinutes,
   formatMinutes,
   totalBreakDurationMinutes,
 } from "@/lib/time";
+import type { WorkSystem } from "@/lib/work-system";
 
 export type MonthlyTimesheetRow = {
   workDate: string;
@@ -31,6 +32,7 @@ type Props = {
   rows: MonthlyTimesheetRow[];
   /** 日本時間の当月・来月表示中のみ true（一括登録ボタン用） */
   showFillMissing?: boolean;
+  workSystem?: WorkSystem;
 };
 
 function displayTime(value: string | null | undefined): string {
@@ -42,7 +44,15 @@ function formatPercent1(ratio: number): string {
   return `${(ratio * 100).toFixed(1)}%`;
 }
 
-export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) {
+export function MonthlyTimesheet({
+  year,
+  month,
+  rows,
+  showFillMissing,
+  workSystem = "standard",
+}: Props) {
+  const isDiscretionary = workSystem === "discretionary";
+
   const totals = rows.reduce(
     (acc, { workDate, record }) => {
       const workMin = calculateWorkMinutes({
@@ -54,8 +64,9 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
         break2End: record?.break2_end ?? null,
         workDate: record?.work_date ?? workDate,
       });
-      const ot = record
-        ? calculateOvertimeMinutes({
+      const breakdown = record
+        ? calculateAttendanceBreakdown({
+            workSystem,
             workDate: record.work_date,
             dayCode: record.day_code,
             clockIn: record.clock_in,
@@ -65,16 +76,18 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
             break2Start: record.break2_start ?? null,
             break2End: record.break2_end ?? null,
           })
-        : 0;
+        : { overtimeMinutes: 0, holidayWorkMinutes: 0 };
 
       acc.workMinutes += workMin;
-      acc.overtimeMinutes += ot;
+      acc.overtimeMinutes += breakdown.overtimeMinutes;
+      acc.holidayWorkMinutes += breakdown.holidayWorkMinutes;
 
       return acc;
     },
     {
       workMinutes: 0,
       overtimeMinutes: 0,
+      holidayWorkMinutes: 0,
     },
   );
 
@@ -108,9 +121,16 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
   return (
     <div className="w-full min-w-0 space-y-3">
       <h2 className="text-center text-base font-bold sm:text-lg">{formatMonthTitle(year, month)}</h2>
+      {isDiscretionary ? (
+        <p className="text-center text-xs text-slate-600">勤務体系: 裁量労働制</p>
+      ) : null}
 
       <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-slate-300 bg-white shadow-sm">
-        <table className="w-full min-w-[720px] table-fixed border-collapse text-xs sm:text-sm">
+        <table
+          className={`w-full table-fixed border-collapse text-xs sm:text-sm ${
+            isDiscretionary ? "min-w-[780px]" : "min-w-[720px]"
+          }`}
+        >
           <colgroup>
             <col className="w-[6%]" />
             <col className="w-[5%]" />
@@ -121,7 +141,8 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
             <col className="w-[7%]" />
             <col className="w-[7%]" />
             <col className="w-[7%]" />
-            <col className="w-[24%]" />
+            {isDiscretionary ? <col className="w-[8%]" /> : null}
+            <col className={isDiscretionary ? "w-[18%]" : "w-[24%]"} />
             <col className="w-[12%]" />
           </colgroup>
           <thead>
@@ -135,6 +156,9 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
               <th className="border border-indigo-900 px-1 py-2">休憩</th>
               <th className="border border-indigo-900 px-1 py-2">勤務</th>
               <th className="border border-indigo-900 px-1 py-2">残業</th>
+              {isDiscretionary ? (
+                <th className="border border-indigo-900 px-1 py-2">休日出勤</th>
+              ) : null}
               <th className="border border-indigo-900 px-1 py-2">メモ</th>
               <th className="border border-indigo-900 px-1 py-2">編集</th>
             </tr>
@@ -159,8 +183,9 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
                 { start: record?.break2_start ?? null, end: record?.break2_end ?? null },
               );
               const dayCell = formatDayCodeCell(record?.day_code);
-              const overtimeMin = record
-                ? calculateOvertimeMinutes({
+              const breakdown = record
+                ? calculateAttendanceBreakdown({
+                    workSystem,
                     workDate: record.work_date,
                     dayCode: record.day_code,
                     clockIn: record.clock_in,
@@ -170,7 +195,7 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
                     break2Start: record.break2_start ?? null,
                     break2End: record.break2_end ?? null,
                   })
-                : 0;
+                : { overtimeMinutes: 0, holidayWorkMinutes: 0 };
 
               return (
                 <tr
@@ -207,8 +232,15 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
                     {workMin ? formatMinutes(workMin) : ""}
                   </td>
                   <td className="border border-slate-200 px-1 py-1 text-center">
-                    {overtimeMin ? formatMinutes(overtimeMin) : ""}
+                    {breakdown.overtimeMinutes ? formatMinutes(breakdown.overtimeMinutes) : ""}
                   </td>
+                  {isDiscretionary ? (
+                    <td className="border border-slate-200 px-1 py-1 text-center">
+                      {breakdown.holidayWorkMinutes
+                        ? formatMinutes(breakdown.holidayWorkMinutes)
+                        : ""}
+                    </td>
+                  ) : null}
                   <td className="max-w-0 min-w-[30ch] border border-slate-200 px-1 py-1 text-left text-[11px] text-slate-800">
                     {record?.memo ? (
                       <span className="block truncate" title={record.memo}>
@@ -240,6 +272,9 @@ export function MonthlyTimesheet({ year, month, rows, showFillMissing }: Props) 
       <div className="w-full space-y-2 rounded-lg border bg-white p-3 text-xs sm:text-sm">
         <p>勤務時間合計: {formatMinutes(totals.workMinutes)}</p>
         <p>残業時間合計: {formatMinutes(totals.overtimeMinutes)}</p>
+        {isDiscretionary ? (
+          <p>休日出勤合計: {formatMinutes(totals.holidayWorkMinutes)}</p>
+        ) : null}
         <p>
           出社率実績:{" "}
           {officeRateActual !== null

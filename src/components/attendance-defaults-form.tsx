@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { COMMUTE_TYPE_OPTIONS } from "@/lib/commute-types";
-import { ALLOWED_DAY_CODES, DAY_CODE_OPTIONS } from "@/lib/day-codes";
+import { ALLOWED_DAY_CODES, dayCodeOptionsForWorkSystem } from "@/lib/day-codes";
 import {
   AttendanceDefaultsFormValue,
   defaultsRecordToForm,
 } from "@/lib/attendance-defaults-map";
 import { isValidTime } from "@/lib/time";
+import { WORK_SYSTEM_OPTIONS, type WorkSystem } from "@/lib/work-system";
 import { AttendanceDefaultsRecord } from "@/types/attendance-defaults";
 
 type Props = {
@@ -53,24 +54,67 @@ export function AttendanceDefaultsForm({ initialRow }: Props) {
         body: JSON.stringify(form),
       });
       const result = (await response.json()) as { message?: string };
-      setMessage(result.message ?? (response.ok ? "保存しました。" : "保存に失敗しました。"));
+      if (response.ok) {
+        window.location.href = "/";
+        return;
+      }
+      setMessage(result.message ?? "保存に失敗しました。");
     });
   }
 
+  const baseDayOptions = useMemo(
+    () => dayCodeOptionsForWorkSystem(form.work_system),
+    [form.work_system],
+  );
+
   const dayCodeSelectOptions =
     !form.weekday_day_code.trim() || ALLOWED_DAY_CODES.has(form.weekday_day_code.trim())
-      ? DAY_CODE_OPTIONS
+      ? baseDayOptions
       : [
           { value: "", label: "（未選択）" },
           {
             value: form.weekday_day_code,
             label: `${form.weekday_day_code}（旧データ・選び直してください）`,
           },
-          ...DAY_CODE_OPTIONS.filter((o) => o.value !== ""),
+          ...baseDayOptions.filter((o) => o.value !== ""),
         ];
 
   return (
     <form onSubmit={onSubmit} className="space-y-6 rounded-xl border bg-white p-4 shadow-sm">
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">勤務体系</h2>
+        <p className="text-sm text-slate-600">
+          裁量労働制では、平日8時間超が残業、土日祝・「残」は休日出勤として集計します。保存した内容は以降の入力・再保存から適用されます。
+        </p>
+        <fieldset className="space-y-2">
+          <legend className="sr-only">勤務体系</legend>
+          {WORK_SYSTEM_OPTIONS.map((opt) => (
+            <label key={opt.value} className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="work_system"
+                value={opt.value}
+                checked={form.work_system === opt.value}
+                onChange={() => {
+                  const next = opt.value as WorkSystem;
+                  setForm((prev) => {
+                    const day = prev.weekday_day_code.trim();
+                    const clearHalf =
+                      next === "discretionary" && (day === "前" || day === "後");
+                    return {
+                      ...prev,
+                      work_system: next,
+                      weekday_day_code: clearHalf ? "" : prev.weekday_day_code,
+                    };
+                  });
+                }}
+              />
+              {opt.label}
+            </label>
+          ))}
+        </fieldset>
+      </section>
+
       <h2 className="text-lg font-semibold">平日のデフォルト</h2>
       <p className="text-sm text-slate-600">
         「当月の空白を初期値で埋める」で使われる値です。出勤・退勤は一括登録に必須です。

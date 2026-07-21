@@ -37,7 +37,9 @@ time-card/
       calendar-jp.ts
       commute-types.ts
       csv.ts
+      day-codes.ts
       time.ts
+      work-system.ts
       supabase/
         client.ts
         middleware.ts
@@ -52,6 +54,7 @@ time-card/
     migration_commute_type.sql
     migration_attendance_defaults.sql
     migration_break2.sql
+    migration_work_system.sql
   middleware.ts
   .env.example
 ```
@@ -102,6 +105,8 @@ npm run dev
 
 2つ目の休憩用に `supabase/migration_break2.sql` を実行してください（`break2_start` / `break2_end` 列）。個別編集画面でのみ入力でき、勤務表の「休憩」列は2組の合計分数を表示します。
 
+勤務体系（通常 / 裁量労働制）と休日出勤分数用に `supabase/migration_work_system.sql` を実行してください（`attendance_defaults.work_system`、`attendance_records.holiday_work_minutes`）。
+
 ## 6) RLS設定SQL
 
 `supabase/rls.sql` を SQL Editor で実行してください。
@@ -110,18 +115,18 @@ npm run dev
 
 - `/login` : メールログイン（Magic Link）
 - `/` : 月次勤務表（全日付行・フッターに勤務・残業などの合計・前月/次月ナビ）。**当月・来月表示時**「空白を初期値で埋める」で、土日祝を除く平日かつ未登録日にだけ行を追加
-- `/settings` : 平日デフォルト（出退勤・休憩・勤怠区分・出勤区分）。一括登録と保存用
+- `/settings` : 勤務体系（通常 / 裁量労働制）と平日デフォルト（出退勤・休憩・勤怠区分・出勤区分）。保存成功後は勤務表へ戻る
 - `/record?date=YYYY-MM-DD` : 1日分の編集（保存は従来どおり upsert）。休憩は最大2組まで入力可能（勤務表は合算表示）
 - `/records` : 当月の勤務表（`/`）へリダイレクト
 - `/summary` : 勤務表（`/`）へリダイレクトのみ（ブックマーク等の旧 URL 用。月別集計画面はありません）
 
-勤怠区分（`day_code`）は次の7種の **1文字コード** で保存します: 勤・残・前・後・有・特・リ（定義は `src/lib/day-codes.ts`）。欠・振は廃止済みですが、旧データの表示・CSV では名称を付けて出力します。
+勤怠区分（`day_code`）は次の7種の **1文字コード** で保存します: 勤・残・前・後・有・特・リ（定義は `src/lib/day-codes.ts`）。欠・振は廃止済みですが、旧データの表示・CSV では名称を付けて出力します。裁量労働制では半休（前・後）は選択肢に出しません。
 
 出勤区分（`commute_type`）は在宅・出社・社外・出張または未設定（`null`）。選択肢の順序は `src/lib/commute-types.ts` のとおりです。
 
 ## 8) 勤務時間・残業の計算
 
-`src/lib/time.ts` の `calculateWorkMinutes` で勤務時間を計算しています。
+`src/lib/time.ts` の `calculateWorkMinutes` / `calculateAttendanceBreakdown` で勤務・残業・休日出勤を計算しています。
 
 退勤時刻が出勤時刻より早い場合（例: 22:00 出勤・翌06:00 退勤）は、**翌日までの同一勤務**として 24 時間分を加算して区間を作り、休憩はその区間に載るオフセットで重なり分だけ控除します（連続 48 時間超の勤務は想定外です）。
 
@@ -129,13 +134,21 @@ npm run dev
 勤務時間 ≒ (退勤の絶対位置 - 出勤) - (休憩と勤務の重なり)
 ```
 
-残業（`calculateOvertimeMinutes`）は次のルールです（定時は8時間）。
+### 通常（`work_system = standard`）
 
 - 土曜・日曜・国民の祝日（振替休日含む）: 勤務時間のすべてを残業
 - 勤怠区分「残」: 同上（全日残業扱い）
 - 「前」（午前半休）: 18時以降の勤務のみ残業（休憩と重なる分は除く）
 - 「後」（午後半休）: 勤務時間から3時間を超える分が残業
 - 上記以外の平日: 8時間を超える分が残業
+- 休日出勤は常に 0
+
+### 裁量労働制（`work_system = discretionary`）
+
+- 平日: 8時間を超える分が残業（半休ルールなし）
+- 土日祝・勤怠区分「残」: 勤務時間のすべてを休日出勤（残業には含めない）
+- 平日かつ勤務1時間以上: 勤怠区分を自動で「勤」（有・特・リ・残は上書きしない）
+- 設定切替だけでは過去データを一括再計算しない。日次の保存・一括登録から新ルールを適用
 
 祝日判定は `japanese-holidays` を使用しています（`src/lib/calendar-jp.ts`）。
 

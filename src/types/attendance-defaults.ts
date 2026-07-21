@@ -1,6 +1,8 @@
 /** Supabase `attendance_defaults` 行 */
 export type AttendanceDefaultsRecord = {
   user_id: string;
+  /** standard | discretionary（未マイグレーション時は欠けることがある） */
+  work_system?: string | null;
   weekday_clock_in: string | null;
   weekday_clock_out: string | null;
   weekday_break_start: string | null;

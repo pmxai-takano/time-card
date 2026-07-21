@@ -13,6 +13,8 @@ export type AttendanceRecord = {
   /** 出勤区分（未マイグレーションの行では欠けることがある） */
   commute_type?: string | null;
   overtime_minutes: number;
+  /** 休日出勤分数（未マイグレーションの行では欠けることがある） */
+  holiday_work_minutes?: number;
   /** 廃止（常に 0）。旧行のみ存在 */
   night_minutes?: number;
   paid_leave_days: number;

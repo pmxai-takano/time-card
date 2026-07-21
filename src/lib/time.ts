@@ -1,4 +1,5 @@
 import { isJapanPublicHoliday, isWeekendJapan } from "@/lib/calendar-jp";
+import type { WorkSystem } from "@/lib/work-system";
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -188,12 +189,8 @@ function overtimeMinutesAfter18(
 }
 
 /**
- * 残業分数（自動計算）
- * - 定時8時間超（平日・祝日でない・土日でない・残でない・前後でない）
- * - 土日祝: 全勤務が残業
- * - 勤怠区分「残」（休日出勤扱い）: 全日残業
- * - 「前」: 18時以降のみ
- * - 「後」: 3時間超過分
+ * 残業分数（自動計算）— 通常勤務体系向け。
+ * 裁量労働制は `calculateAttendanceBreakdown` を使う。
  */
 export function calculateOvertimeMinutes(params: {
   workDate: string;
@@ -205,9 +202,52 @@ export function calculateOvertimeMinutes(params: {
   break2Start?: string | null;
   break2End?: string | null;
 }): number {
+  return calculateAttendanceBreakdown({
+    ...params,
+    workSystem: "standard",
+  }).overtimeMinutes;
+}
+
+export type AttendanceBreakdown = {
+  workMinutes: number;
+  overtimeMinutes: number;
+  holidayWorkMinutes: number;
+};
+
+type BreakdownParams = {
+  workSystem?: WorkSystem;
+  workDate: string;
+  dayCode: string | null;
+  clockIn: string | null;
+  clockOut: string | null;
+  breakStart: string | null;
+  breakEnd: string | null;
+  break2Start?: string | null;
+  break2End?: string | null;
+};
+
+/**
+ * 勤務・残業・休日出勤の内訳。
+ *
+ * 通常:
+ * - 土日祝・「残」: 全勤務が残業
+ * - 「前」: 18時以降のみ残業
+ * - 「後」: 3時間超過分が残業
+ * - その他平日: 8時間超過分が残業
+ * - 休日出勤は常に 0
+ *
+ * 裁量労働制:
+ * - 土日祝・「残」: 全勤務が休日出勤（残業 0）
+ * - 平日: 8時間超過分が残業（半休ルールなし）
+ */
+export function calculateAttendanceBreakdown(
+  params: BreakdownParams,
+): AttendanceBreakdown {
+  const workSystem = params.workSystem ?? "standard";
   const { workDate, dayCode, clockIn, clockOut, breakStart, breakEnd, break2Start, break2End } =
     params;
-  const net = calculateWorkMinutes({
+
+  const workMinutes = calculateWorkMinutes({
     clockIn,
     clockOut,
     breakStart,
@@ -216,27 +256,56 @@ export function calculateOvertimeMinutes(params: {
     break2End,
     workDate,
   });
-  if (net <= 0) return 0;
 
+  if (workMinutes <= 0) {
+    return { workMinutes: 0, overtimeMinutes: 0, holidayWorkMinutes: 0 };
+  }
+
+  if (workSystem === "discretionary") {
+    if (isWeekendJapan(workDate) || isJapanPublicHoliday(workDate) || dayCode === "残") {
+      return { workMinutes, overtimeMinutes: 0, holidayWorkMinutes: workMinutes };
+    }
+    return {
+      workMinutes,
+      overtimeMinutes: Math.max(0, workMinutes - STANDARD_WORK_MINUTES),
+      holidayWorkMinutes: 0,
+    };
+  }
+
+  // standard
   if (isWeekendJapan(workDate) || isJapanPublicHoliday(workDate) || dayCode === "残") {
-    return net;
+    return { workMinutes, overtimeMinutes: workMinutes, holidayWorkMinutes: 0 };
   }
 
   if (dayCode === "前") {
-    if (!clockIn || !clockOut) return 0;
-    return overtimeMinutesAfter18(
-      clockIn,
-      clockOut,
-      breakStart,
-      breakEnd,
-      break2Start ?? null,
-      break2End ?? null,
-    );
+    if (!clockIn || !clockOut) {
+      return { workMinutes, overtimeMinutes: 0, holidayWorkMinutes: 0 };
+    }
+    return {
+      workMinutes,
+      overtimeMinutes: overtimeMinutesAfter18(
+        clockIn,
+        clockOut,
+        breakStart,
+        breakEnd,
+        break2Start ?? null,
+        break2End ?? null,
+      ),
+      holidayWorkMinutes: 0,
+    };
   }
 
   if (dayCode === "後") {
-    return Math.max(0, net - HALF_DAY_PM_STANDARD_MINUTES);
+    return {
+      workMinutes,
+      overtimeMinutes: Math.max(0, workMinutes - HALF_DAY_PM_STANDARD_MINUTES),
+      holidayWorkMinutes: 0,
+    };
   }
 
-  return Math.max(0, net - STANDARD_WORK_MINUTES);
+  return {
+    workMinutes,
+    overtimeMinutes: Math.max(0, workMinutes - STANDARD_WORK_MINUTES),
+    holidayWorkMinutes: 0,
+  };
 }
