@@ -1,4 +1,9 @@
-import { isJapanPublicHoliday, isWeekendJapan } from "@/lib/calendar-jp";
+import {
+  addDaysJapan,
+  calendarDayKindJapan,
+  isDeemedOvertimeWeekdayJapan,
+  type CalendarDayKind,
+} from "@/lib/calendar-jp";
 import type { WorkSystem } from "@/lib/work-system";
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -114,6 +119,8 @@ export function breakDurationMinutes(
 const STANDARD_WORK_MINUTES = 8 * 60;
 const HALF_DAY_PM_STANDARD_MINUTES = 3 * 60;
 const EIGHTEEN_OCLOCK_MINUTES = 18 * 60;
+/** 平日のみなし残業（法定外）分数 */
+export const DEEMED_WEEKDAY_OVERTIME_MINUTES = 90;
 
 /** 休憩が [seg0, seg1) と重なる分（勤務区間に載った休憩のみ） */
 function breakOverlapWithEveningSegment(
@@ -140,7 +147,7 @@ function breakOverlapWithEveningSegment(
 
 /**
  * 午前半休: 各暦日の 18:00〜24:00 における勤務（休憩と重なる分は除く）。
- * 日跨ぎ勤務では勤務日 0:00 基準の絶対分で 18 時窓を 2 日分まで評価する。
+ * `dayCount` は勤務日 0:00 基準で評価する暦日数（日跨ぎ分割時は 1）。
  */
 function overtimeMinutesAfter18(
   clockIn: string,
@@ -149,12 +156,13 @@ function overtimeMinutesAfter18(
   breakEnd: string | null,
   break2Start: string | null = null,
   break2End: string | null = null,
+  dayCount = 2,
 ): number {
   const inAbs = toMinutesHm(clockIn);
   const outAbs = absoluteShiftEnd(inAbs, toMinutesHm(clockOut));
 
   let total = 0;
-  for (let day = 0; day < 2; day += 1) {
+  for (let day = 0; day < dayCount; day += 1) {
     const w0 = EIGHTEEN_OCLOCK_MINUTES + day * 1440;
     const w1 = 1440 + day * 1440;
     const seg0 = Math.max(inAbs, w0);
@@ -210,8 +218,14 @@ export function calculateOvertimeMinutes(params: {
 
 export type AttendanceBreakdown = {
   workMinutes: number;
+  /** 法定外残業（土曜・祝日の全日、平日の定時超過、「残」など） */
   overtimeMinutes: number;
+  /** 法定休日（日曜）の勤務 */
   holidayWorkMinutes: number;
+  /** みなし残業枠（平日勤務日は 1.5 時間） */
+  deemedOvertimeMinutes: number;
+  /** みなし法定外（平日の法定外残業のうちみなし枠でカバーされる分） */
+  deemedNonStatutoryMinutes: number;
 };
 
 type BreakdownParams = {
@@ -226,19 +240,236 @@ type BreakdownParams = {
   break2End?: string | null;
 };
 
+function emptyBreakdown(workMinutes = 0): AttendanceBreakdown {
+  return {
+    workMinutes,
+    overtimeMinutes: 0,
+    holidayWorkMinutes: 0,
+    deemedOvertimeMinutes: 0,
+    deemedNonStatutoryMinutes: 0,
+  };
+}
+
 /**
- * 勤務・残業・休日出勤の内訳。
+ * 勤務区間のうち [seg0, seg1) に含まれる実働分数（休憩控除後）。
+ */
+function workMinutesInAbsoluteSegment(
+  inAbs: number,
+  outAbs: number,
+  seg0: number,
+  seg1: number,
+  breakStart: string | null,
+  breakEnd: string | null,
+  break2Start: string | null,
+  break2End: string | null,
+): number {
+  const a0 = Math.max(inAbs, seg0);
+  const a1 = Math.min(outAbs, seg1);
+  if (a0 >= a1) return 0;
+
+  let len = a1 - a0;
+  if (breakStart && breakEnd) {
+    len -= breakOverlapWithEveningSegment(
+      inAbs,
+      outAbs,
+      breakStart,
+      breakEnd,
+      a0,
+      a1,
+    );
+  }
+  if (break2Start && break2End) {
+    len -= breakOverlapWithEveningSegment(
+      inAbs,
+      outAbs,
+      break2Start,
+      break2End,
+      a0,
+      a1,
+    );
+  }
+  return Math.max(0, len);
+}
+
+type ShiftDaySegment = {
+  date: string;
+  minutes: number;
+  /** 勤務日（レコードの work_date）側の区間か */
+  isWorkDate: boolean;
+};
+
+/**
+ * 勤務を暦日 0:00 で分割（日跨ぎは最大 2 暦日）。
+ * 絶対分は勤務日 0:00 = 0。
+ */
+function splitShiftByCalendarDay(params: {
+  workDate: string;
+  clockIn: string;
+  clockOut: string;
+  breakStart: string | null;
+  breakEnd: string | null;
+  break2Start: string | null;
+  break2End: string | null;
+}): ShiftDaySegment[] {
+  const inAbs = toMinutesHm(params.clockIn);
+  const outAbs = absoluteShiftEnd(inAbs, toMinutesHm(params.clockOut));
+  const nextDate = addDaysJapan(params.workDate, 1);
+
+  const day0 = workMinutesInAbsoluteSegment(
+    inAbs,
+    outAbs,
+    0,
+    1440,
+    params.breakStart,
+    params.breakEnd,
+    params.break2Start,
+    params.break2End,
+  );
+  const day1 = workMinutesInAbsoluteSegment(
+    inAbs,
+    outAbs,
+    1440,
+    outAbs > 1440 ? outAbs : 1440,
+    params.breakStart,
+    params.breakEnd,
+    params.break2Start,
+    params.break2End,
+  );
+
+  const segments: ShiftDaySegment[] = [
+    { date: params.workDate, minutes: day0, isWorkDate: true },
+  ];
+  if (day1 > 0) {
+    segments.push({ date: nextDate, minutes: day1, isWorkDate: false });
+  }
+  return segments;
+}
+
+function weekdayOvertimeForSegment(params: {
+  workSystem: WorkSystem;
+  dayCode: string | null;
+  isWorkDate: boolean;
+  minutes: number;
+  clockIn: string;
+  clockOut: string;
+  breakStart: string | null;
+  breakEnd: string | null;
+  break2Start: string | null;
+  break2End: string | null;
+}): number {
+  const { workSystem, dayCode, isWorkDate, minutes } = params;
+  if (minutes <= 0) return 0;
+
+  if (workSystem === "discretionary") {
+    return Math.max(0, minutes - STANDARD_WORK_MINUTES);
+  }
+
+  // 半休ルールは勤務日側の平日区間にのみ適用
+  if (isWorkDate && dayCode === "前") {
+    return overtimeMinutesAfter18(
+      params.clockIn,
+      params.clockOut,
+      params.breakStart,
+      params.breakEnd,
+      params.break2Start,
+      params.break2End,
+      1,
+    );
+  }
+  if (isWorkDate && dayCode === "後") {
+    return Math.max(0, minutes - HALF_DAY_PM_STANDARD_MINUTES);
+  }
+
+  return Math.max(0, minutes - STANDARD_WORK_MINUTES);
+}
+
+/**
+ * 1 暦日分の勤務を残業 / 休日出勤へ振り分け。
+ * dayCode「残」は勤務日側にのみ全日残業（または裁量の休出）として適用。
+ */
+function classifySegmentMinutes(params: {
+  workSystem: WorkSystem;
+  dayCode: string | null;
+  kind: CalendarDayKind;
+  isWorkDate: boolean;
+  minutes: number;
+  clockIn: string;
+  clockOut: string;
+  breakStart: string | null;
+  breakEnd: string | null;
+  break2Start: string | null;
+  break2End: string | null;
+}): { overtimeMinutes: number; holidayWorkMinutes: number; weekdayOvertimeMinutes: number } {
+  const { workSystem, dayCode, kind, isWorkDate, minutes } = params;
+  if (minutes <= 0) {
+    return { overtimeMinutes: 0, holidayWorkMinutes: 0, weekdayOvertimeMinutes: 0 };
+  }
+
+  const treatAsResidualOff = isWorkDate && dayCode === "残";
+
+  if (workSystem === "discretionary") {
+    if (kind === "legalHoliday" || kind === "nonStatutoryHoliday" || treatAsResidualOff) {
+      return { overtimeMinutes: 0, holidayWorkMinutes: minutes, weekdayOvertimeMinutes: 0 };
+    }
+    const ot = weekdayOvertimeForSegment(params);
+    return { overtimeMinutes: ot, holidayWorkMinutes: 0, weekdayOvertimeMinutes: ot };
+  }
+
+  // standard
+  if (kind === "legalHoliday") {
+    return { overtimeMinutes: 0, holidayWorkMinutes: minutes, weekdayOvertimeMinutes: 0 };
+  }
+  if (kind === "nonStatutoryHoliday" || treatAsResidualOff) {
+    return { overtimeMinutes: minutes, holidayWorkMinutes: 0, weekdayOvertimeMinutes: 0 };
+  }
+
+  const ot = weekdayOvertimeForSegment(params);
+  return { overtimeMinutes: ot, holidayWorkMinutes: 0, weekdayOvertimeMinutes: ot };
+}
+
+function withDeemed(
+  workDate: string,
+  workMinutes: number,
+  overtimeMinutes: number,
+  holidayWorkMinutes: number,
+  weekdayOvertimeMinutes: number,
+): AttendanceBreakdown {
+  const onDeemedWeekday =
+    workMinutes > 0 && isDeemedOvertimeWeekdayJapan(workDate);
+  const deemedOvertimeMinutes = onDeemedWeekday
+    ? DEEMED_WEEKDAY_OVERTIME_MINUTES
+    : 0;
+  const deemedNonStatutoryMinutes = onDeemedWeekday
+    ? Math.min(weekdayOvertimeMinutes, DEEMED_WEEKDAY_OVERTIME_MINUTES)
+    : 0;
+  return {
+    workMinutes,
+    overtimeMinutes,
+    holidayWorkMinutes,
+    deemedOvertimeMinutes,
+    deemedNonStatutoryMinutes,
+  };
+}
+
+/**
+ * 勤務・残業・休日出勤・みなしの内訳。
+ *
+ * 共通:
+ * - 日跨ぎ勤務は 0:00 で暦日分割し、各暦日の区分で振り分ける
+ * - 法定休日 = 日曜 → 休日出勤
+ * - 法定外休日 = 土曜・日曜以外の祝日 → 通常は残業 / 裁量は休日出勤
+ * - みなし残業 = 平日（月〜金・祝日除く）勤務日あたり 1.5 時間
+ * - みなし法定外 = 平日区間の法定外残業のうちみなし枠内の分数
  *
  * 通常:
- * - 土日祝・「残」: 全勤務が残業
- * - 「前」: 18時以降のみ残業
- * - 「後」: 3時間超過分が残業
- * - その他平日: 8時間超過分が残業
- * - 休日出勤は常に 0
+ * - 「残」: 勤務日側の全勤務が残業（その暦日が日曜なら休日出勤が優先）
+ * - 「前」: 勤務日側は 18時以降のみ残業
+ * - 「後」: 勤務日側は 3時間超過分が残業
+ * - その他平日区間: その暦日の実働が 8時間超過分が残業
  *
  * 裁量労働制:
- * - 土日祝・「残」: 全勤務が休日出勤（残業 0）
- * - 平日: 8時間超過分が残業（半休ルールなし）
+ * - 土日祝・「残」区間: 休日出勤
+ * - 平日区間: 8時間超過分が残業（半休ルールなし）
  */
 export function calculateAttendanceBreakdown(
   params: BreakdownParams,
@@ -257,55 +488,50 @@ export function calculateAttendanceBreakdown(
     workDate,
   });
 
-  if (workMinutes <= 0) {
-    return { workMinutes: 0, overtimeMinutes: 0, holidayWorkMinutes: 0 };
+  if (workMinutes <= 0 || !clockIn || !clockOut) {
+    return emptyBreakdown(workMinutes > 0 ? workMinutes : 0);
   }
 
-  if (workSystem === "discretionary") {
-    if (isWeekendJapan(workDate) || isJapanPublicHoliday(workDate) || dayCode === "残") {
-      return { workMinutes, overtimeMinutes: 0, holidayWorkMinutes: workMinutes };
-    }
-    return {
-      workMinutes,
-      overtimeMinutes: Math.max(0, workMinutes - STANDARD_WORK_MINUTES),
-      holidayWorkMinutes: 0,
-    };
+  const segments = splitShiftByCalendarDay({
+    workDate,
+    clockIn,
+    clockOut,
+    breakStart,
+    breakEnd,
+    break2Start: break2Start ?? null,
+    break2End: break2End ?? null,
+  });
+
+  let overtimeMinutes = 0;
+  let holidayWorkMinutes = 0;
+  let weekdayOvertimeMinutes = 0;
+
+  for (const segment of segments) {
+    // 法定休日（日曜）は「残」より優先
+    const kind = calendarDayKindJapan(segment.date);
+    const part = classifySegmentMinutes({
+      workSystem,
+      dayCode,
+      kind,
+      isWorkDate: segment.isWorkDate,
+      minutes: segment.minutes,
+      clockIn,
+      clockOut,
+      breakStart,
+      breakEnd,
+      break2Start: break2Start ?? null,
+      break2End: break2End ?? null,
+    });
+    overtimeMinutes += part.overtimeMinutes;
+    holidayWorkMinutes += part.holidayWorkMinutes;
+    weekdayOvertimeMinutes += part.weekdayOvertimeMinutes;
   }
 
-  // standard
-  if (isWeekendJapan(workDate) || isJapanPublicHoliday(workDate) || dayCode === "残") {
-    return { workMinutes, overtimeMinutes: workMinutes, holidayWorkMinutes: 0 };
-  }
-
-  if (dayCode === "前") {
-    if (!clockIn || !clockOut) {
-      return { workMinutes, overtimeMinutes: 0, holidayWorkMinutes: 0 };
-    }
-    return {
-      workMinutes,
-      overtimeMinutes: overtimeMinutesAfter18(
-        clockIn,
-        clockOut,
-        breakStart,
-        breakEnd,
-        break2Start ?? null,
-        break2End ?? null,
-      ),
-      holidayWorkMinutes: 0,
-    };
-  }
-
-  if (dayCode === "後") {
-    return {
-      workMinutes,
-      overtimeMinutes: Math.max(0, workMinutes - HALF_DAY_PM_STANDARD_MINUTES),
-      holidayWorkMinutes: 0,
-    };
-  }
-
-  return {
+  return withDeemed(
+    workDate,
     workMinutes,
-    overtimeMinutes: Math.max(0, workMinutes - STANDARD_WORK_MINUTES),
-    holidayWorkMinutes: 0,
-  };
+    overtimeMinutes,
+    holidayWorkMinutes,
+    weekdayOvertimeMinutes,
+  );
 }

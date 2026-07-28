@@ -33,6 +33,53 @@ export function isJapanPublicHoliday(workDate: string): boolean {
   return Boolean(JapaneseHolidays.isHolidayAt(date, true));
 }
 
+/** 法定休日（日曜） */
+export function isLegalHolidayJapan(workDate: string): boolean {
+  return weekdayIndexJapan(workDate) === 0;
+}
+
+/**
+ * 法定外休日: 土曜、または日曜以外の国民の祝日（振替含む）。
+ * 日曜の祝日は法定休日側に寄せる。
+ */
+export function isNonStatutoryHolidayJapan(workDate: string): boolean {
+  if (isLegalHolidayJapan(workDate)) return false;
+  return weekdayIndexJapan(workDate) === 6 || isJapanPublicHoliday(workDate);
+}
+
+/**
+ * みなし残業の対象平日: 月曜〜金曜かつ祝日でない日。
+ */
+export function isDeemedOvertimeWeekdayJapan(workDate: string): boolean {
+  const w = weekdayIndexJapan(workDate);
+  if (w < 1 || w > 5) return false;
+  return !isJapanPublicHoliday(workDate);
+}
+
+/** YYYY-MM-DD に日数を加算（日本の暦日として） */
+export function addDaysJapan(workDate: string, deltaDays: number): string {
+  const parts = workDate.split("-").map(Number);
+  const y = parts[0];
+  const m = parts[1];
+  const d = parts[2];
+  if (!y || !m || !d) return workDate;
+  const utc = Date.UTC(y, m - 1, d + deltaDays, 3, 0, 0);
+  const dt = new Date(utc);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+export type CalendarDayKind = "legalHoliday" | "nonStatutoryHoliday" | "weekday";
+
+/** 暦日の休日区分（法定休日 / 法定外休日 / 平日） */
+export function calendarDayKindJapan(workDate: string): CalendarDayKind {
+  if (isLegalHolidayJapan(workDate)) return "legalHoliday";
+  if (isNonStatutoryHolidayJapan(workDate)) return "nonStatutoryHoliday";
+  return "weekday";
+}
+
 /** 日本時間の「今日」の年月日 */
 export function getTodayYmdJapan(): { year: number; month: number; day: number } {
   const s = new Intl.DateTimeFormat("en-CA", {

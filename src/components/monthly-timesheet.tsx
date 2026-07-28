@@ -76,11 +76,18 @@ export function MonthlyTimesheet({
             break2Start: record.break2_start ?? null,
             break2End: record.break2_end ?? null,
           })
-        : { overtimeMinutes: 0, holidayWorkMinutes: 0 };
+        : {
+            overtimeMinutes: 0,
+            holidayWorkMinutes: 0,
+            deemedOvertimeMinutes: 0,
+            deemedNonStatutoryMinutes: 0,
+          };
 
       acc.workMinutes += workMin;
       acc.overtimeMinutes += breakdown.overtimeMinutes;
       acc.holidayWorkMinutes += breakdown.holidayWorkMinutes;
+      acc.deemedOvertimeMinutes += breakdown.deemedOvertimeMinutes;
+      acc.deemedNonStatutoryMinutes += breakdown.deemedNonStatutoryMinutes;
 
       return acc;
     },
@@ -88,6 +95,8 @@ export function MonthlyTimesheet({
       workMinutes: 0,
       overtimeMinutes: 0,
       holidayWorkMinutes: 0,
+      deemedOvertimeMinutes: 0,
+      deemedNonStatutoryMinutes: 0,
     },
   );
 
@@ -126,24 +135,21 @@ export function MonthlyTimesheet({
       ) : null}
 
       <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-slate-300 bg-white shadow-sm">
-        <table
-          className={`w-full table-fixed border-collapse text-xs sm:text-sm ${
-            isDiscretionary ? "min-w-[780px]" : "min-w-[720px]"
-          }`}
-        >
+        <table className="w-full min-w-[860px] table-fixed border-collapse text-xs sm:text-sm">
           <colgroup>
-            <col className="w-[6%]" />
             <col className="w-[5%]" />
+            <col className="w-[4%]" />
+            <col className="w-[6%]" />
             <col className="w-[7%]" />
-            <col className="w-[9%]" />
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
+            <col className="w-[6%]" />
+            <col className="w-[6%]" />
+            <col className="w-[6%]" />
+            <col className="w-[7%]" />
             <col className="w-[8%]" />
-            <col className="w-[8%]" />
-            <col className="w-[7%]" />
-            <col className="w-[7%]" />
-            <col className="w-[7%]" />
-            {isDiscretionary ? <col className="w-[8%]" /> : null}
-            <col className={isDiscretionary ? "w-[18%]" : "w-[24%]"} />
-            <col className="w-[12%]" />
+            <col className="w-[16%]" />
+            <col className="w-[10%]" />
           </colgroup>
           <thead>
             <tr className="bg-indigo-950 text-white">
@@ -156,9 +162,8 @@ export function MonthlyTimesheet({
               <th className="border border-indigo-900 px-1 py-2">休憩</th>
               <th className="border border-indigo-900 px-1 py-2">勤務</th>
               <th className="border border-indigo-900 px-1 py-2">残業</th>
-              {isDiscretionary ? (
-                <th className="border border-indigo-900 px-1 py-2">休日出勤</th>
-              ) : null}
+              <th className="border border-indigo-900 px-1 py-2">休日出勤</th>
+              <th className="border border-indigo-900 px-1 py-2">みなし法定外</th>
               <th className="border border-indigo-900 px-1 py-2">メモ</th>
               <th className="border border-indigo-900 px-1 py-2">編集</th>
             </tr>
@@ -195,7 +200,12 @@ export function MonthlyTimesheet({
                     break2Start: record.break2_start ?? null,
                     break2End: record.break2_end ?? null,
                   })
-                : { overtimeMinutes: 0, holidayWorkMinutes: 0 };
+                : {
+                    overtimeMinutes: 0,
+                    holidayWorkMinutes: 0,
+                    deemedOvertimeMinutes: 0,
+                    deemedNonStatutoryMinutes: 0,
+                  };
 
               return (
                 <tr
@@ -234,13 +244,16 @@ export function MonthlyTimesheet({
                   <td className="border border-slate-200 px-1 py-1 text-center">
                     {breakdown.overtimeMinutes ? formatMinutes(breakdown.overtimeMinutes) : ""}
                   </td>
-                  {isDiscretionary ? (
-                    <td className="border border-slate-200 px-1 py-1 text-center">
-                      {breakdown.holidayWorkMinutes
-                        ? formatMinutes(breakdown.holidayWorkMinutes)
-                        : ""}
-                    </td>
-                  ) : null}
+                  <td className="border border-slate-200 px-1 py-1 text-center">
+                    {breakdown.holidayWorkMinutes
+                      ? formatMinutes(breakdown.holidayWorkMinutes)
+                      : ""}
+                  </td>
+                  <td className="border border-slate-200 px-1 py-1 text-center">
+                    {breakdown.deemedNonStatutoryMinutes
+                      ? formatMinutes(breakdown.deemedNonStatutoryMinutes)
+                      : ""}
+                  </td>
                   <td className="max-w-0 min-w-[30ch] border border-slate-200 px-1 py-1 text-left text-[11px] text-slate-800">
                     {record?.memo ? (
                       <span className="block truncate" title={record.memo}>
@@ -271,10 +284,20 @@ export function MonthlyTimesheet({
 
       <div className="w-full space-y-2 rounded-lg border bg-white p-3 text-xs sm:text-sm">
         <p>勤務時間合計: {formatMinutes(totals.workMinutes)}</p>
-        <p>残業時間合計: {formatMinutes(totals.overtimeMinutes)}</p>
-        {isDiscretionary ? (
-          <p>休日出勤合計: {formatMinutes(totals.holidayWorkMinutes)}</p>
-        ) : null}
+        <p>残業時間合計（法定外）: {formatMinutes(totals.overtimeMinutes)}</p>
+        <p>
+          休日出勤合計
+          {isDiscretionary ? "（日曜・土曜・祝日・残）" : "（法定休日・日曜）"}:{" "}
+          {formatMinutes(totals.holidayWorkMinutes)}
+        </p>
+        <p>みなし残業合計（平日 1:30 × 勤務日）: {formatMinutes(totals.deemedOvertimeMinutes)}</p>
+        <p>みなし法定外合計: {formatMinutes(totals.deemedNonStatutoryMinutes)}</p>
+        <p>
+          みなし超過（法定外 − みなし法定外）:{" "}
+          {formatMinutes(
+            Math.max(0, totals.overtimeMinutes - totals.deemedNonStatutoryMinutes),
+          )}
+        </p>
         <p>
           出社率実績:{" "}
           {officeRateActual !== null

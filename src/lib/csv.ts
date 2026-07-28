@@ -39,6 +39,8 @@ export function buildAttendanceCsv(
     "勤務時間",
     "残業",
     "休日出勤",
+    "みなし残業",
+    "みなし法定外",
     "メモ",
   ];
 
@@ -83,6 +85,8 @@ export function buildAttendanceCsv(
       formatMinutes(workMinutes),
       formatMinutes(breakdown.overtimeMinutes),
       formatMinutes(breakdown.holidayWorkMinutes),
+      formatMinutes(breakdown.deemedOvertimeMinutes),
+      formatMinutes(breakdown.deemedNonStatutoryMinutes),
       record.memo ?? "",
     ].map((cell) => escapeCsv(cell));
   });

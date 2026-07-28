@@ -81,6 +81,8 @@ export function AttendanceForm({ initialValue, workSystem = "standard" }: Props)
 
   const overtimePreview = formatMinutes(breakdown.overtimeMinutes);
   const holidayWorkPreview = formatMinutes(breakdown.holidayWorkMinutes);
+  const deemedNonStatutoryPreview = formatMinutes(breakdown.deemedNonStatutoryMinutes);
+  const deemedOvertimePreview = formatMinutes(breakdown.deemedOvertimeMinutes);
 
   const baseDayOptions = useMemo(
     () => dayCodeOptionsForWorkSystem(workSystem),
@@ -276,18 +278,21 @@ export function AttendanceForm({ initialValue, workSystem = "standard" }: Props)
           勤務時間（入力値ベース）: <span className="font-semibold">{workTime}</span>
         </p>
         <p>
-          残業時間（自動計算・保存時に反映）: <span className="font-semibold">{overtimePreview}</span>
+          残業時間・法定外（自動計算）: <span className="font-semibold">{overtimePreview}</span>
         </p>
-        {isDiscretionary ? (
-          <p>
-            休日出勤（自動計算・保存時に反映）:{" "}
-            <span className="font-semibold">{holidayWorkPreview}</span>
-          </p>
-        ) : null}
+        <p>
+          休日出勤・法定休日（日曜）: <span className="font-semibold">{holidayWorkPreview}</span>
+        </p>
+        <p>
+          みなし残業枠: <span className="font-semibold">{deemedOvertimePreview}</span>
+        </p>
+        <p>
+          みなし法定外: <span className="font-semibold">{deemedNonStatutoryPreview}</span>
+        </p>
         <p className="text-xs text-slate-600">
           {isDiscretionary
-            ? "裁量労働制: 平日は8時間超が残業。土日祝・「残」は休日出勤。平日かつ1時間以上勤務で勤怠区分を「勤」にします（有・特・リ・残は維持）。"
-            : "平日は定時8時間超が残業。土日祝は全日残業。「前」は18時以降、「後」は3時間超過分。「残」は全日残業扱いです。"}
+            ? "裁量労働制: 平日は8時間超が残業。土曜・祝日・「残」・日曜は休日出勤。日跨ぎは0:00以降を翌日の区分で振り分け。みなし残業は平日1.5時間。みなし法定外は平日残業のうち枠内の分です。"
+            : "平日は定時8時間超が法定外残業。土曜・祝日・「残」は全日法定外。「前」は18時以降、「後」は3時間超過分。日曜は法定休日出勤。日跨ぎは0:00以降を翌日の区分で振り分け。みなし残業は平日1.5時間。みなし法定外は平日残業のうち枠内の分です。"}
         </p>
       </div>
 
