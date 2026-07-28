@@ -135,7 +135,11 @@ export function MonthlyTimesheet({
       ) : null}
 
       <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-slate-300 bg-white shadow-sm">
-        <table className="w-full min-w-[860px] table-fixed border-collapse text-xs sm:text-sm">
+        <table
+          className={`w-full table-fixed border-collapse text-xs sm:text-sm ${
+            isDiscretionary ? "min-w-[860px]" : "min-w-[780px]"
+          }`}
+        >
           <colgroup>
             <col className="w-[5%]" />
             <col className="w-[4%]" />
@@ -147,8 +151,8 @@ export function MonthlyTimesheet({
             <col className="w-[6%]" />
             <col className="w-[6%]" />
             <col className="w-[7%]" />
-            <col className="w-[8%]" />
-            <col className="w-[16%]" />
+            {isDiscretionary ? <col className="w-[8%]" /> : null}
+            <col className={isDiscretionary ? "w-[16%]" : "w-[22%]"} />
             <col className="w-[10%]" />
           </colgroup>
           <thead>
@@ -163,7 +167,9 @@ export function MonthlyTimesheet({
               <th className="border border-indigo-900 px-1 py-2">勤務</th>
               <th className="border border-indigo-900 px-1 py-2">残業</th>
               <th className="border border-indigo-900 px-1 py-2">休日出勤</th>
-              <th className="border border-indigo-900 px-1 py-2">みなし法定外</th>
+              {isDiscretionary ? (
+                <th className="border border-indigo-900 px-1 py-2">みなし法定外</th>
+              ) : null}
               <th className="border border-indigo-900 px-1 py-2">メモ</th>
               <th className="border border-indigo-900 px-1 py-2">編集</th>
             </tr>
@@ -249,11 +255,13 @@ export function MonthlyTimesheet({
                       ? formatMinutes(breakdown.holidayWorkMinutes)
                       : ""}
                   </td>
-                  <td className="border border-slate-200 px-1 py-1 text-center">
-                    {breakdown.deemedNonStatutoryMinutes
-                      ? formatMinutes(breakdown.deemedNonStatutoryMinutes)
-                      : ""}
-                  </td>
+                  {isDiscretionary ? (
+                    <td className="border border-slate-200 px-1 py-1 text-center">
+                      {breakdown.deemedNonStatutoryMinutes
+                        ? formatMinutes(breakdown.deemedNonStatutoryMinutes)
+                        : ""}
+                    </td>
+                  ) : null}
                   <td className="max-w-0 min-w-[30ch] border border-slate-200 px-1 py-1 text-left text-[11px] text-slate-800">
                     {record?.memo ? (
                       <span className="block truncate" title={record.memo}>
@@ -290,14 +298,21 @@ export function MonthlyTimesheet({
           {isDiscretionary ? "（日曜・土曜・祝日・残）" : "（法定休日・日曜）"}:{" "}
           {formatMinutes(totals.holidayWorkMinutes)}
         </p>
-        <p>みなし残業合計（平日 1:30 × 勤務日）: {formatMinutes(totals.deemedOvertimeMinutes)}</p>
-        <p>みなし法定外合計: {formatMinutes(totals.deemedNonStatutoryMinutes)}</p>
-        <p>
-          みなし超過（法定外 − みなし法定外）:{" "}
-          {formatMinutes(
-            Math.max(0, totals.overtimeMinutes - totals.deemedNonStatutoryMinutes),
-          )}
-        </p>
+        {isDiscretionary ? (
+          <>
+            <p>
+              みなし残業合計（平日 1:30 × 勤務日）:{" "}
+              {formatMinutes(totals.deemedOvertimeMinutes)}
+            </p>
+            <p>みなし法定外合計: {formatMinutes(totals.deemedNonStatutoryMinutes)}</p>
+            <p>
+              みなし超過（法定外 − みなし法定外）:{" "}
+              {formatMinutes(
+                Math.max(0, totals.overtimeMinutes - totals.deemedNonStatutoryMinutes),
+              )}
+            </p>
+          </>
+        ) : null}
         <p>
           出社率実績:{" "}
           {officeRateActual !== null

@@ -119,7 +119,7 @@ export function breakDurationMinutes(
 const STANDARD_WORK_MINUTES = 8 * 60;
 const HALF_DAY_PM_STANDARD_MINUTES = 3 * 60;
 const EIGHTEEN_OCLOCK_MINUTES = 18 * 60;
-/** 平日のみなし残業（法定外）分数 */
+/** 裁量労働制の平日のみなし残業（法定外）分数 */
 export const DEEMED_WEEKDAY_OVERTIME_MINUTES = 90;
 
 /** 休憩が [seg0, seg1) と重なる分（勤務区間に載った休憩のみ） */
@@ -222,9 +222,9 @@ export type AttendanceBreakdown = {
   overtimeMinutes: number;
   /** 法定休日（日曜）の勤務 */
   holidayWorkMinutes: number;
-  /** みなし残業枠（平日勤務日は 1.5 時間） */
+  /** みなし残業枠（裁量労働制・平日勤務日は 1.5 時間） */
   deemedOvertimeMinutes: number;
-  /** みなし法定外（平日の法定外残業のうちみなし枠でカバーされる分） */
+  /** みなし法定外（裁量労働制・平日の法定外残業のうちみなし枠でカバーされる分） */
   deemedNonStatutoryMinutes: number;
 };
 
@@ -428,6 +428,7 @@ function classifySegmentMinutes(params: {
 }
 
 function withDeemed(
+  workSystem: WorkSystem,
   workDate: string,
   workMinutes: number,
   overtimeMinutes: number,
@@ -435,7 +436,9 @@ function withDeemed(
   weekdayOvertimeMinutes: number,
 ): AttendanceBreakdown {
   const onDeemedWeekday =
-    workMinutes > 0 && isDeemedOvertimeWeekdayJapan(workDate);
+    workSystem === "discretionary" &&
+    workMinutes > 0 &&
+    isDeemedOvertimeWeekdayJapan(workDate);
   const deemedOvertimeMinutes = onDeemedWeekday
     ? DEEMED_WEEKDAY_OVERTIME_MINUTES
     : 0;
@@ -458,18 +461,19 @@ function withDeemed(
  * - 日跨ぎ勤務は 0:00 で暦日分割し、各暦日の区分で振り分ける
  * - 法定休日 = 日曜 → 休日出勤
  * - 法定外休日 = 土曜・日曜以外の祝日 → 通常は残業 / 裁量は休日出勤
- * - みなし残業 = 平日（月〜金・祝日除く）勤務日あたり 1.5 時間
- * - みなし法定外 = 平日区間の法定外残業のうちみなし枠内の分数
  *
  * 通常:
  * - 「残」: 勤務日側の全勤務が残業（その暦日が日曜なら休日出勤が優先）
  * - 「前」: 勤務日側は 18時以降のみ残業
  * - 「後」: 勤務日側は 3時間超過分が残業
  * - その他平日区間: その暦日の実働が 8時間超過分が残業
+ * - みなし残業は適用しない
  *
  * 裁量労働制:
  * - 土日祝・「残」区間: 休日出勤
  * - 平日区間: 8時間超過分が残業（半休ルールなし）
+ * - みなし残業 = 平日（月〜金・祝日除く）勤務日あたり 1.5 時間
+ * - みなし法定外 = 平日区間の法定外残業のうちみなし枠内の分数
  */
 export function calculateAttendanceBreakdown(
   params: BreakdownParams,
@@ -528,6 +532,7 @@ export function calculateAttendanceBreakdown(
   }
 
   return withDeemed(
+    workSystem,
     workDate,
     workMinutes,
     overtimeMinutes,

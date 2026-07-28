@@ -48,7 +48,7 @@ export function isNonStatutoryHolidayJapan(workDate: string): boolean {
 }
 
 /**
- * みなし残業の対象平日: 月曜〜金曜かつ祝日でない日。
+ * みなし残業の対象平日（裁量労働制）: 月曜〜金曜かつ祝日でない日。
  */
 export function isDeemedOvertimeWeekdayJapan(workDate: string): boolean {
   const w = weekdayIndexJapan(workDate);
