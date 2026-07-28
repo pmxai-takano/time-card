@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     workMinutes: prelim.workMinutes,
   });
 
-  const { overtimeMinutes, holidayWorkMinutes } = calculateAttendanceBreakdown({
+  const { overtimeMinutes, holidayWorkMinutes, nightMinutes } = calculateAttendanceBreakdown({
     workSystem,
     workDate,
     dayCode,
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
       commute_type: commuteType,
       overtime_minutes: overtimeMinutes,
       holiday_work_minutes: holidayWorkMinutes,
-      night_minutes: 0,
+      night_minutes: nightMinutes,
       paid_leave_days: 0,
       summer_leave_days: 0,
       business_trip_days: 0,

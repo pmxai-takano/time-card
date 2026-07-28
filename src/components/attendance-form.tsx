@@ -83,6 +83,10 @@ export function AttendanceForm({ initialValue, workSystem = "standard" }: Props)
   const holidayWorkPreview = formatMinutes(breakdown.holidayWorkMinutes);
   const deemedNonStatutoryPreview = formatMinutes(breakdown.deemedNonStatutoryMinutes);
   const deemedOvertimePreview = formatMinutes(breakdown.deemedOvertimeMinutes);
+  const nightPreview = formatMinutes(breakdown.nightMinutes);
+  const totalLaborPreview = formatMinutes(
+    breakdown.workMinutes + breakdown.deemedOvertimeMinutes,
+  );
 
   const baseDayOptions = useMemo(
     () => dayCodeOptionsForWorkSystem(workSystem),
@@ -275,27 +279,34 @@ export function AttendanceForm({ initialValue, workSystem = "standard" }: Props)
 
       <div className="space-y-1 rounded-md bg-slate-100 px-3 py-2 text-sm">
         <p>
-          勤務時間（入力値ベース）: <span className="font-semibold">{workTime}</span>
+          実勤務時間: <span className="font-semibold">{workTime}</span>
         </p>
         <p>
-          残業時間・法定外（自動計算）: <span className="font-semibold">{overtimePreview}</span>
+          残業・法定外（休除）: <span className="font-semibold">{overtimePreview}</span>
         </p>
         <p>
-          休日出勤・法定休日（日曜）: <span className="font-semibold">{holidayWorkPreview}</span>
+          法定休日労働（日曜）: <span className="font-semibold">{holidayWorkPreview}</span>
         </p>
         {isDiscretionary ? (
           <>
             <p>
-              みなし残業枠: <span className="font-semibold">{deemedOvertimePreview}</span>
+              みなし残業: <span className="font-semibold">{deemedOvertimePreview}</span>
             </p>
             <p>
-              みなし法定外: <span className="font-semibold">{deemedNonStatutoryPreview}</span>
+              みなし加算後労働時間: <span className="font-semibold">{totalLaborPreview}</span>
+            </p>
+            <p>
+              みなし法定外（法定外＋法定休日）:{" "}
+              <span className="font-semibold">{deemedNonStatutoryPreview}</span>
+            </p>
+            <p>
+              深夜（22:00〜翌5:00）: <span className="font-semibold">{nightPreview}</span>
             </p>
           </>
         ) : null}
         <p className="text-xs text-slate-600">
           {isDiscretionary
-            ? "裁量労働制: 平日は8時間超が残業。土曜・祝日・「残」・日曜は休日出勤。日跨ぎは0:00以降を翌日の区分で振り分け。みなし残業は平日1.5時間。みなし法定外は平日残業のうち枠内の分です。"
+            ? "裁量: 平日は残業=max(1:30, 実働−8h)。土曜・祝日は実働全量を法定外。日曜は法定休日。日跨ぎは0:00分割。みなし法定外＝法定外＋法定休日。"
             : "平日は定時8時間超が法定外残業。土曜・祝日・「残」は全日法定外。「前」は18時以降、「後」は3時間超過分。日曜は法定休日出勤。日跨ぎは0:00以降を翌日の区分で振り分けます。"}
         </p>
       </div>

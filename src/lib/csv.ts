@@ -49,11 +49,12 @@ export function buildAttendanceCsv(
     "休憩2開始",
     "休憩2終了",
     "休憩時間",
-    "勤務時間",
-    "残業",
-    "休日出勤",
+    "実勤務時間",
+    "法定外(休除)",
+    "法定休日",
     "みなし残業",
     "みなし法定外",
+    "深夜",
     "勤務体系",
     "メモ",
   ];
@@ -107,6 +108,7 @@ export function buildAttendanceCsv(
       formatMinutes(breakdown.holidayWorkMinutes),
       formatMinutes(isDiscretionary ? breakdown.deemedOvertimeMinutes : 0),
       formatMinutes(isDiscretionary ? breakdown.deemedNonStatutoryMinutes : 0),
+      formatMinutes(breakdown.nightMinutes),
       isDiscretionary ? "裁量労働制" : "通常",
       record.memo ?? "",
     ].map((cell) => escapeCsv(cell));

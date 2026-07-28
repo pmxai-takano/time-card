@@ -7,6 +7,11 @@ import {
   listWorkDatesInMonth,
   parseYearMonth,
 } from "@/lib/calendar-jp";
+import {
+  aggregateMonthCombinedMinutes,
+  listPriorYearMonths,
+  type MonthCombinedMinutes,
+} from "@/lib/discretionary-monthly";
 import { createClient } from "@/lib/supabase/server";
 import { fetchWorkSystemDefaults } from "@/lib/work-system-defaults";
 import { resolveWorkSystemForMonth } from "@/lib/work-system";
@@ -33,7 +38,11 @@ export default async function Home({ searchParams }: Props) {
   const start = dates[0];
   const end = dates[dates.length - 1];
 
-  const [{ data }, workSysDefaults] = await Promise.all([
+  const priorMonths = listPriorYearMonths(year, month, 5);
+  const oldest = priorMonths[priorMonths.length - 1] ?? { year, month };
+  const historyStart = listWorkDatesInMonth(oldest.year, oldest.month)[0];
+
+  const [{ data }, workSysDefaults, { data: historyData }] = await Promise.all([
     supabase
       .from("attendance_records")
       .select("*")
@@ -41,6 +50,12 @@ export default async function Home({ searchParams }: Props) {
       .lte("work_date", end)
       .order("work_date", { ascending: true }),
     fetchWorkSystemDefaults(supabase, user.id),
+    supabase
+      .from("attendance_records")
+      .select("*")
+      .gte("work_date", historyStart)
+      .lte("work_date", end)
+      .order("work_date", { ascending: true }),
   ]);
 
   const workSystem = resolveWorkSystemForMonth({
@@ -61,6 +76,31 @@ export default async function Home({ searchParams }: Props) {
   }));
 
   const showFillMissing = isFillableMonth(year, month);
+
+  const historyRecords = (historyData ?? []) as AttendanceRecord[];
+  const recentCombinedMonths: MonthCombinedMinutes[] = [];
+  const monthChain = [{ year, month }, ...priorMonths];
+  for (const ym of monthChain) {
+    const sys = resolveWorkSystemForMonth({
+      year: ym.year,
+      month: ym.month,
+      userDefault: workSysDefaults.userDefault,
+      monthWorkSystems: workSysDefaults.monthWorkSystems,
+    });
+    const mm = String(ym.month).padStart(2, "0");
+    const prefix = `${ym.year}-${mm}-`;
+    const monthRecords = historyRecords.filter((r) => r.work_date.startsWith(prefix));
+    recentCombinedMonths.push({
+      year: ym.year,
+      month: ym.month,
+      combinedMinutes: aggregateMonthCombinedMinutes({
+        year: ym.year,
+        month: ym.month,
+        records: monthRecords,
+        workSystem: sys,
+      }),
+    });
+  }
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-4 px-2 py-3 sm:px-4 sm:py-4">
@@ -87,6 +127,7 @@ export default async function Home({ searchParams }: Props) {
         rows={rows}
         showFillMissing={showFillMissing}
         workSystem={workSystem}
+        recentCombinedMonths={recentCombinedMonths}
       />
     </main>
   );

@@ -84,7 +84,7 @@ export function AttendanceDefaultsForm({ initialRow }: Props) {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">勤務体系</h2>
         <p className="text-sm text-slate-600">
-          裁量労働制では、平日8時間超が残業、土曜・祝日・日曜・「残」は休日出勤として集計します。みなし残業は平日1.5時間（みなし法定外はその枠内の残業分）です。勤務表では月ごとに通常／裁量を選べます（2026年6月以前は通常、2026年7月は裁量が初期値）。保存した内容は以降の入力・再保存から適用されます。
+          裁量労働制では、平日の残業は max(1:30, 実働−8h)、土曜・祝日は実働全量を法定外、日曜は法定休日として集計します。みなし法定外＝法定外＋法定休日です。勤務表では月ごとに通常／裁量を選べます（2026年6月以前は通常、2026年7月は裁量が初期値）。保存した内容は以降の入力・再保存から適用されます。
         </p>
         <fieldset className="space-y-2">
           <legend className="sr-only">勤務体系</legend>
