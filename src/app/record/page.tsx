@@ -5,7 +5,8 @@ import { LogoutButton } from "@/components/logout-button";
 import { parseYearMonth } from "@/lib/calendar-jp";
 import { recordToInput } from "@/lib/attendance-map";
 import { createClient } from "@/lib/supabase/server";
-import { parseWorkSystem } from "@/lib/work-system";
+import { fetchWorkSystemDefaults } from "@/lib/work-system-defaults";
+import { resolveWorkSystemForWorkDate } from "@/lib/work-system";
 import { AttendanceRecord } from "@/types/attendance";
 
 type Props = {
@@ -29,17 +30,17 @@ export default async function RecordPage({ searchParams }: Props) {
     redirect("/login");
   }
 
-  const [{ data }, { data: defaults }] = await Promise.all([
+  const [{ data }, workSysDefaults] = await Promise.all([
     supabase.from("attendance_records").select("*").eq("work_date", workDate).maybeSingle(),
-    supabase
-      .from("attendance_defaults")
-      .select("work_system")
-      .eq("user_id", user.id)
-      .maybeSingle(),
+    fetchWorkSystemDefaults(supabase, user.id),
   ]);
 
   const record = data as AttendanceRecord | null;
-  const workSystem = parseWorkSystem(defaults?.work_system);
+  const workSystem = resolveWorkSystemForWorkDate({
+    workDate,
+    userDefault: workSysDefaults.userDefault,
+    monthWorkSystems: workSysDefaults.monthWorkSystems,
+  });
   const parts = workDate.split("-");
   const y = Number(parts[0]);
   const m = Number(parts[1]);

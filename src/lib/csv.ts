@@ -7,7 +7,10 @@ import {
   formatMinutes,
   totalBreakDurationMinutes,
 } from "@/lib/time";
-import type { WorkSystem } from "@/lib/work-system";
+import {
+  resolveWorkSystemForWorkDate,
+  type WorkSystem,
+} from "@/lib/work-system";
 
 function escapeCsv(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -20,11 +23,20 @@ function displayTime(value: string | null): string {
   return value ? value.slice(0, 5) : "";
 }
 
+export type CsvWorkSystemContext = {
+  userDefault: WorkSystem;
+  monthWorkSystems?: Record<string, WorkSystem> | null;
+};
+
 export function buildAttendanceCsv(
   records: AttendanceRecord[],
-  workSystem: WorkSystem = "standard",
+  workSystemOrCtx: WorkSystem | CsvWorkSystemContext = "standard",
 ): string {
-  const isDiscretionary = workSystem === "discretionary";
+  const ctx: CsvWorkSystemContext =
+    typeof workSystemOrCtx === "string"
+      ? { userDefault: workSystemOrCtx }
+      : workSystemOrCtx;
+
   const header = [
     "勤務日",
     "曜日",
@@ -40,11 +52,19 @@ export function buildAttendanceCsv(
     "勤務時間",
     "残業",
     "休日出勤",
-    ...(isDiscretionary ? (["みなし残業", "みなし法定外"] as const) : []),
+    "みなし残業",
+    "みなし法定外",
+    "勤務体系",
     "メモ",
   ];
 
   const rows = records.map((record) => {
+    const workSystem = resolveWorkSystemForWorkDate({
+      workDate: record.work_date,
+      userDefault: ctx.userDefault,
+      monthWorkSystems: ctx.monthWorkSystems,
+    });
+    const isDiscretionary = workSystem === "discretionary";
     const workMinutes = calculateWorkMinutes({
       clockIn: record.clock_in,
       clockOut: record.clock_out,
@@ -85,12 +105,9 @@ export function buildAttendanceCsv(
       formatMinutes(workMinutes),
       formatMinutes(breakdown.overtimeMinutes),
       formatMinutes(breakdown.holidayWorkMinutes),
-      ...(isDiscretionary
-        ? [
-            formatMinutes(breakdown.deemedOvertimeMinutes),
-            formatMinutes(breakdown.deemedNonStatutoryMinutes),
-          ]
-        : []),
+      formatMinutes(isDiscretionary ? breakdown.deemedOvertimeMinutes : 0),
+      formatMinutes(isDiscretionary ? breakdown.deemedNonStatutoryMinutes : 0),
+      isDiscretionary ? "裁量労働制" : "通常",
       record.memo ?? "",
     ].map((cell) => escapeCsv(cell));
   });

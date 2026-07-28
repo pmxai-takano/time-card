@@ -3,6 +3,8 @@ export type AttendanceDefaultsRecord = {
   user_id: string;
   /** standard | discretionary（未マイグレーション時は欠けることがある） */
   work_system?: string | null;
+  /** 月別上書き { "YYYY-MM": "standard" | "discretionary" } */
+  month_work_systems?: Record<string, unknown> | null;
   weekday_clock_in: string | null;
   weekday_clock_out: string | null;
   weekday_break_start: string | null;

@@ -12,7 +12,12 @@ import {
   weekdayIndexJapan,
 } from "@/lib/calendar-jp";
 import { calculateAttendanceBreakdown } from "@/lib/time";
-import { parseWorkSystem, resolveDayCodeForSave } from "@/lib/work-system";
+import {
+  parseMonthWorkSystems,
+  parseWorkSystem,
+  resolveDayCodeForSave,
+  resolveWorkSystemForMonth,
+} from "@/lib/work-system";
 
 const RECORDS = "attendance_records";
 const DEFAULTS = "attendance_defaults";
@@ -57,7 +62,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const workSystem = parseWorkSystem(defRow.work_system);
+  const workSystem = resolveWorkSystemForMonth({
+    year,
+    month,
+    userDefault: parseWorkSystem(defRow.work_system),
+    monthWorkSystems: parseMonthWorkSystems(
+      (defRow as { month_work_systems?: unknown }).month_work_systems,
+    ),
+  });
   const clockIn = normalizeTimeForDb(String(defRow.weekday_clock_in ?? ""));
   const clockOut = normalizeTimeForDb(String(defRow.weekday_clock_out ?? ""));
   if (!clockIn || !clockOut) {

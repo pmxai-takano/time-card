@@ -12,6 +12,7 @@ import {
 import { commuteTypeDisplayClassName } from "@/lib/commute-types";
 import { formatDayCodeCell } from "@/lib/day-codes";
 import { FillMonthButton } from "@/components/fill-month-button";
+import { MonthWorkSystemSelect } from "@/components/month-work-system-select";
 import { AttendanceRecord } from "@/types/attendance";
 import {
   calculateAttendanceBreakdown,
@@ -130,9 +131,12 @@ export function MonthlyTimesheet({
   return (
     <div className="w-full min-w-0 space-y-3">
       <h2 className="text-center text-base font-bold sm:text-lg">{formatMonthTitle(year, month)}</h2>
+      <MonthWorkSystemSelect year={year} month={month} value={workSystem} />
       {isDiscretionary ? (
-        <p className="text-center text-xs text-slate-600">勤務体系: 裁量労働制</p>
-      ) : null}
+        <p className="text-center text-xs text-slate-600">勤務体系: 裁量労働制（みなし残業あり）</p>
+      ) : (
+        <p className="text-center text-xs text-slate-600">勤務体系: 通常</p>
+      )}
 
       <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-slate-300 bg-white shadow-sm">
         <table

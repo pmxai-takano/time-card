@@ -8,7 +8,8 @@ import {
   parseYearMonth,
 } from "@/lib/calendar-jp";
 import { createClient } from "@/lib/supabase/server";
-import { parseWorkSystem } from "@/lib/work-system";
+import { fetchWorkSystemDefaults } from "@/lib/work-system-defaults";
+import { resolveWorkSystemForMonth } from "@/lib/work-system";
 import { AttendanceRecord } from "@/types/attendance";
 
 type Props = {
@@ -32,21 +33,22 @@ export default async function Home({ searchParams }: Props) {
   const start = dates[0];
   const end = dates[dates.length - 1];
 
-  const [{ data }, { data: defaults }] = await Promise.all([
+  const [{ data }, workSysDefaults] = await Promise.all([
     supabase
       .from("attendance_records")
       .select("*")
       .gte("work_date", start)
       .lte("work_date", end)
       .order("work_date", { ascending: true }),
-    supabase
-      .from("attendance_defaults")
-      .select("work_system")
-      .eq("user_id", user.id)
-      .maybeSingle(),
+    fetchWorkSystemDefaults(supabase, user.id),
   ]);
 
-  const workSystem = parseWorkSystem(defaults?.work_system);
+  const workSystem = resolveWorkSystemForMonth({
+    year,
+    month,
+    userDefault: workSysDefaults.userDefault,
+    monthWorkSystems: workSysDefaults.monthWorkSystems,
+  });
 
   const map = new Map<string, AttendanceRecord>();
   for (const row of (data ?? []) as AttendanceRecord[]) {

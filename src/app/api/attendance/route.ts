@@ -6,10 +6,13 @@ import {
   parseDayCodeForDb,
 } from "@/lib/attendance-fields";
 import { calculateAttendanceBreakdown } from "@/lib/time";
-import { parseWorkSystem, resolveDayCodeForSave } from "@/lib/work-system";
+import { fetchWorkSystemDefaults } from "@/lib/work-system-defaults";
+import {
+  resolveDayCodeForSave,
+  resolveWorkSystemForWorkDate,
+} from "@/lib/work-system";
 
 const TABLE = "attendance_records";
-const DEFAULTS = "attendance_defaults";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -64,12 +67,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "休憩2終了時刻の形式が不正です。" }, { status: 400 });
   }
 
-  const { data: defRow } = await supabase
-    .from(DEFAULTS)
-    .select("work_system")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const workSystem = parseWorkSystem(defRow?.work_system);
+  const workSysDefaults = await fetchWorkSystemDefaults(supabase, user.id);
+  const workSystem = resolveWorkSystemForWorkDate({
+    workDate,
+    userDefault: workSysDefaults.userDefault,
+    monthWorkSystems: workSysDefaults.monthWorkSystems,
+  });
 
   const prelim = calculateAttendanceBreakdown({
     workSystem,

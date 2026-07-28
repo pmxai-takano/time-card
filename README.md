@@ -107,6 +107,8 @@ npm run dev
 
 勤務体系（通常 / 裁量労働制）と休日出勤分数用に `supabase/migration_work_system.sql` を実行してください（`attendance_defaults.work_system`、`attendance_records.holiday_work_minutes`）。
 
+月別の勤務体系上書き用に `supabase/migration_month_work_systems.sql` を実行してください（`attendance_defaults.month_work_systems`）。
+
 ## 6) RLS設定SQL
 
 `supabase/rls.sql` を SQL Editor で実行してください。
@@ -143,6 +145,20 @@ npm run dev
   - 例: 日曜 22:00〜月曜 6:00 → 日曜分は法定休日出勤、月曜分は平日ルール
   - 例: 金曜 22:00〜土曜 6:00 → 金曜分は平日ルール、土曜分は法定外残業
   - 例: 平日〜翌祝日 → 平日分は平日ルール、祝日分は法定外（裁量は休出）
+
+### 月ごとの勤務体系
+
+勤務表ヘッダーで、対象月を「通常」または「裁量労働制」に切り替えられます（`attendance_defaults.month_work_systems` に保存）。
+
+組み込み初期値:
+
+- **2026年6月以前**: 通常
+- **2026年7月**: 裁量労働制
+- **それ以外**: 設定画面の勤務体系
+
+優先順位は「月別の選択 → 組み込み初期値 → 設定の勤務体系」です。
+
+`supabase/migration_month_work_systems.sql` を SQL Editor で実行してください（`month_work_systems` 列）。
 
 ### みなし残業（裁量労働制のみ）
 

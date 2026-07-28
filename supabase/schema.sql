@@ -49,6 +49,7 @@ execute function public.set_updated_at();
 create table if not exists public.attendance_defaults (
   user_id uuid primary key references auth.users(id) on delete cascade,
   work_system text not null default 'standard',
+  month_work_systems jsonb not null default '{}'::jsonb,
   weekday_clock_in time,
   weekday_clock_out time,
   weekday_break_start time,

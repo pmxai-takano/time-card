@@ -21,6 +21,85 @@ export function parseWorkSystem(value: unknown): WorkSystem {
   return value === "discretionary" ? "discretionary" : "standard";
 }
 
+/** YYYY-MM キー */
+export function yearMonthKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+/**
+ * 月の組み込みデフォルト。
+ * - 2026年6月以前 → 通常
+ * - 2026年7月 → 裁量労働制
+ * - それ以外 → null（ユーザー設定を使う）
+ */
+export function builtInWorkSystemForMonth(
+  year: number,
+  month: number,
+): WorkSystem | null {
+  if (year < 2026) return "standard";
+  if (year === 2026 && month <= 6) return "standard";
+  if (year === 2026 && month === 7) return "discretionary";
+  return null;
+}
+
+export function parseMonthWorkSystems(
+  value: unknown,
+): Record<string, WorkSystem> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, WorkSystem> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!/^\d{4}-\d{2}$/.test(key)) continue;
+    if (raw === "standard" || raw === "discretionary") {
+      out[key] = raw;
+    }
+  }
+  return out;
+}
+
+export function monthOverrideFromMap(
+  map: Record<string, WorkSystem>,
+  year: number,
+  month: number,
+): WorkSystem | undefined {
+  return map[yearMonthKey(year, month)];
+}
+
+/**
+ * 対象月の勤務体系。
+ * 優先順位: 月別上書き → 組み込みデフォルト（〜2026/6, 2026/7）→ ユーザー設定
+ */
+export function resolveWorkSystemForMonth(params: {
+  year: number;
+  month: number;
+  userDefault: WorkSystem;
+  monthWorkSystems?: Record<string, WorkSystem> | null;
+}): WorkSystem {
+  const override = params.monthWorkSystems
+    ? monthOverrideFromMap(params.monthWorkSystems, params.year, params.month)
+    : undefined;
+  if (override) return override;
+  return (
+    builtInWorkSystemForMonth(params.year, params.month) ?? params.userDefault
+  );
+}
+
+export function resolveWorkSystemForWorkDate(params: {
+  workDate: string;
+  userDefault: WorkSystem;
+  monthWorkSystems?: Record<string, WorkSystem> | null;
+}): WorkSystem {
+  const parts = params.workDate.split("-").map(Number);
+  const year = parts[0];
+  const month = parts[1];
+  if (!year || !month) return params.userDefault;
+  return resolveWorkSystemForMonth({
+    year,
+    month,
+    userDefault: params.userDefault,
+    monthWorkSystems: params.monthWorkSystems,
+  });
+}
+
 export function isLeaveDayCode(code: string | null | undefined): boolean {
   return LEAVE_DAY_CODES.has((code ?? "").trim());
 }
