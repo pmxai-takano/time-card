@@ -14,9 +14,15 @@ export type MonthCombinedMinutes = {
   year: number;
   month: number;
   combinedMinutes: number;
+  /** その月に適用した勤務体系 */
+  workSystem: WorkSystem;
+  /** 勤怠レコード件数（0 なら未入力月） */
+  recordCount: number;
 };
 
-/** 当月を含む 2〜6 か月平均（法定外＋法定休日）。データが足りない窓は null。 */
+/** 当月を含む 2〜6 か月平均（法定外＋法定休日）。
+ * 連続 n か月のうち未入力月がある窓は null（データ不足）。
+ */
 export function computeRollingAverages(
   monthsNewestFirst: MonthCombinedMinutes[],
 ): Array<{ months: number; averageMinutes: number | null }> {
@@ -27,6 +33,10 @@ export function computeRollingAverages(
       continue;
     }
     const slice = monthsNewestFirst.slice(0, n);
+    if (slice.some((m) => m.recordCount <= 0)) {
+      result.push({ months: n, averageMinutes: null });
+      continue;
+    }
     const sum = slice.reduce((s, m) => s + m.combinedMinutes, 0);
     result.push({ months: n, averageMinutes: Math.round(sum / n) });
   }

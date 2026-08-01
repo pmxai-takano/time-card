@@ -95,6 +95,8 @@ export default async function Home({ searchParams }: Props) {
     recentCombinedMonths.push({
       year: ym.year,
       month: ym.month,
+      workSystem: sys,
+      recordCount: monthRecords.length,
       combinedMinutes: aggregateMonthCombinedMinutes({
         year: ym.year,
         month: ym.month,

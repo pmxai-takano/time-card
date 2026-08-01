@@ -8,6 +8,10 @@ export const WORK_SYSTEM_OPTIONS = [
   { value: "discretionary" as const, label: "裁量労働制" },
 ];
 
+export function workSystemLabel(workSystem: WorkSystem): string {
+  return WORK_SYSTEM_OPTIONS.find((o) => o.value === workSystem)?.label ?? workSystem;
+}
+
 /** 裁量労働制: この分数以上で出勤扱い */
 export const ATTENDANCE_THRESHOLD_MINUTES = 60;
 

@@ -24,7 +24,7 @@ import {
   MONTHLY_80H_WARN_MINUTES,
   type AttendanceBreakdown,
 } from "@/lib/time";
-import type { WorkSystem } from "@/lib/work-system";
+import { workSystemLabel, type WorkSystem } from "@/lib/work-system";
 import type { MonthCombinedMinutes } from "@/lib/discretionary-monthly";
 import { computeRollingAverages } from "@/lib/discretionary-monthly";
 
@@ -40,7 +40,7 @@ type Props = {
   /** 日本時間の当月・来月表示中のみ true（一括登録ボタン用） */
   showFillMissing?: boolean;
   workSystem?: WorkSystem;
-  /** 当月を先頭にした直近月の（法定外＋法定休日）分。裁量の複数月平均用 */
+  /** 当月を先頭にした直近月の法休含（法定外＋法定休日）。複数月平均用 */
   recentCombinedMonths?: MonthCombinedMinutes[];
 };
 
@@ -133,19 +133,22 @@ export function MonthlyTimesheet({
     ? buildDiscretionaryMonthlyMetrics(totals)
     : null;
 
-  const rolling = isDiscretionary && discMetrics
-    ? computeRollingAverages(
-        recentCombinedMonths.length > 0
-          ? recentCombinedMonths
-          : [
-              {
-                year,
-                month,
-                combinedMinutes: discMetrics.companyDeemedNonStatutoryMinutes,
-              },
-            ],
-      )
-    : [];
+  const rollingMonths =
+    recentCombinedMonths.length > 0
+      ? recentCombinedMonths
+      : discMetrics
+        ? [
+            {
+              year,
+              month,
+              workSystem,
+              recordCount: rows.filter((r) => r.record).length,
+              combinedMinutes: discMetrics.companyDeemedNonStatutoryMinutes,
+            } satisfies MonthCombinedMinutes,
+          ]
+        : [];
+  const rolling =
+    isDiscretionary && discMetrics ? computeRollingAverages(rollingMonths) : [];
   const anyRollingOver80 = rolling.some(
     (r) => r.averageMinutes !== null && r.averageMinutes > MONTHLY_80H_WARN_MINUTES,
   );
@@ -503,7 +506,9 @@ export function MonthlyTimesheet({
                 </p>
               ) : null}
               <div className="pt-1">
-                <p className="mb-1 font-medium">2〜6か月平均（社内みなし法定外）</p>
+                <p className="mb-1 font-medium">
+                  2〜6か月平均（法休含：法定外＋法定休日）
+                </p>
                 {rolling.map((r) => (
                   <p
                     key={r.months}
@@ -523,6 +528,25 @@ export function MonthlyTimesheet({
                   <p className="mt-1 rounded bg-red-100 px-2 py-1 font-semibold text-red-900">
                     2〜6か月平均のいずれかが80時間を超えています。
                   </p>
+                ) : null}
+                {rollingMonths.length > 0 ? (
+                  <div className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">
+                    <p className="mb-1 font-medium text-slate-800">月別内訳（平均の分子）</p>
+                    <ul className="space-y-0.5">
+                      {rollingMonths.map((m) => (
+                        <li key={`${m.year}-${m.month}`}>
+                          {m.year}/{String(m.month).padStart(2, "0")}{" "}
+                          {workSystemLabel(m.workSystem)}:{" "}
+                          {m.recordCount > 0
+                            ? `${formatMinutes(m.combinedMinutes)}（${m.recordCount}日）`
+                            : "—（未入力）"}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1.5 text-slate-600">
+                      通常月は実残業、裁量月はみなし1:30等を含みます。みなしを通常月へ遡及適用していません。未入力月を含む窓の平均は「データ不足」です。
+                    </p>
+                  </div>
                 ) : null}
               </div>
               {discMetrics.statusNotes.length > 0 ? (
