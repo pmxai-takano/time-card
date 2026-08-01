@@ -21,6 +21,8 @@ type Props = {
   searchParams: Promise<{ year?: string; month?: string }>;
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function Home({ searchParams }: Props) {
   const params = await searchParams;
   const { year, month } = parseYearMonth(params.year, params.month);
@@ -122,6 +124,7 @@ export default async function Home({ searchParams }: Props) {
       </nav>
 
       <MonthlyTimesheet
+        key={`${year}-${month}`}
         year={year}
         month={month}
         rows={rows}

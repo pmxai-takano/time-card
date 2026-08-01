@@ -12,6 +12,7 @@ import {
 import { commuteTypeDisplayClassName } from "@/lib/commute-types";
 import { formatDayCodeCell } from "@/lib/day-codes";
 import { FillMonthButton } from "@/components/fill-month-button";
+import { MonthNav } from "@/components/month-nav";
 import { MonthWorkSystemSelect } from "@/components/month-work-system-select";
 import { AttendanceRecord } from "@/types/attendance";
 import {
@@ -564,26 +565,11 @@ export function MonthlyTimesheet({
         </p>
       </div>
 
-      <nav className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 border-t pt-3 text-sm">
-        <Link
-          href={`/?year=${prev.year}&month=${prev.month}`}
-          className="rounded-lg border bg-white px-3 py-2 hover:bg-slate-50"
-        >
-          前の月
-        </Link>
-        <Link
-          href={`/?year=${today.year}&month=${today.month}`}
-          className="rounded-lg border bg-white px-3 py-2 hover:bg-slate-50"
-        >
-          当月
-        </Link>
-        <Link
-          href={`/?year=${next.year}&month=${next.month}`}
-          className="rounded-lg border bg-white px-3 py-2 hover:bg-slate-50"
-        >
-          次の月
-        </Link>
-      </nav>
+      <MonthNav
+        prev={prev}
+        current={{ year: today.year, month: today.month }}
+        next={next}
+      />
     </div>
   );
 }
