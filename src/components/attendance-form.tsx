@@ -81,11 +81,12 @@ export function AttendanceForm({ initialValue, workSystem = "standard" }: Props)
 
   const overtimePreview = formatMinutes(breakdown.overtimeMinutes);
   const holidayWorkPreview = formatMinutes(breakdown.holidayWorkMinutes);
-  const deemedNonStatutoryPreview = formatMinutes(breakdown.deemedNonStatutoryMinutes);
+  const discretionaryWorkPreview = formatMinutes(breakdown.discretionaryWorkMinutes);
   const deemedOvertimePreview = formatMinutes(breakdown.deemedOvertimeMinutes);
+  const nonStatutoryHolidayPreview = formatMinutes(breakdown.nonStatutoryHolidayMinutes);
   const nightPreview = formatMinutes(breakdown.nightMinutes);
-  const totalLaborPreview = formatMinutes(
-    breakdown.workMinutes + breakdown.deemedOvertimeMinutes,
+  const actualOvertimeReferencePreview = formatMinutes(
+    breakdown.actualOvertimeReferenceMinutes,
   );
 
   const baseDayOptions = useMemo(
@@ -278,35 +279,53 @@ export function AttendanceForm({ initialValue, workSystem = "standard" }: Props)
       </section>
 
       <div className="space-y-1 rounded-md bg-slate-100 px-3 py-2 text-sm">
-        <p>
-          実勤務時間: <span className="font-semibold">{workTime}</span>
-        </p>
-        <p>
-          残業・法定外（休除）: <span className="font-semibold">{overtimePreview}</span>
-        </p>
-        <p>
-          法定休日労働（日曜）: <span className="font-semibold">{holidayWorkPreview}</span>
-        </p>
         {isDiscretionary ? (
           <>
             <p>
-              みなし残業: <span className="font-semibold">{deemedOvertimePreview}</span>
+              実労働: <span className="font-semibold">{workTime}</span>
             </p>
             <p>
-              みなし加算後労働時間: <span className="font-semibold">{totalLaborPreview}</span>
+              みなし労働9:30:{" "}
+              <span className="font-semibold">{discretionaryWorkPreview}</span>
             </p>
             <p>
-              みなし法定外（法定外＋法定休日）:{" "}
-              <span className="font-semibold">{deemedNonStatutoryPreview}</span>
+              みなし法定外1:30:{" "}
+              <span className="font-semibold">{deemedOvertimePreview}</span>
             </p>
             <p>
-              深夜（22:00〜翌5:00）: <span className="font-semibold">{nightPreview}</span>
+              所定休日:{" "}
+              <span className="font-semibold">{nonStatutoryHolidayPreview}</span>
+            </p>
+            <p>
+              法定休日: <span className="font-semibold">{holidayWorkPreview}</span>
+            </p>
+            <p>
+              深夜（22:00〜翌5:00）:{" "}
+              <span className="font-semibold">{nightPreview}</span>
+            </p>
+            <p>
+              実労働超過参考:{" "}
+              <span className="font-semibold">{actualOvertimeReferencePreview}</span>
             </p>
           </>
-        ) : null}
+        ) : (
+          <>
+            <p>
+              実勤務時間: <span className="font-semibold">{workTime}</span>
+            </p>
+            <p>
+              残業・法定外（休除）:{" "}
+              <span className="font-semibold">{overtimePreview}</span>
+            </p>
+            <p>
+              法定休日労働（日曜）:{" "}
+              <span className="font-semibold">{holidayWorkPreview}</span>
+            </p>
+          </>
+        )}
         <p className="text-xs text-slate-600">
           {isDiscretionary
-            ? "裁量: 平日は残業=max(1:30, 実働−8h)。土曜・祝日は実働全量を法定外。日曜は法定休日。日跨ぎは0:00分割。みなし法定外＝法定外＋法定休日。"
+            ? "裁量 v0.1: みなし労働9:30・みなし法定外1:30は平日勤務日に固定。実労働の9:30超は参考値のみ（法令・45h判定へ自動加算しない）。所定休日は土曜・祝日の実労働、法定休日は日曜。日跨ぎは0:00分割。"
             : "平日は定時8時間超が法定外残業。土曜・祝日・「残」は全日法定外。「前」は18時以降、「後」は3時間超過分。日曜は法定休日出勤。日跨ぎは0:00以降を翌日の区分で振り分けます。"}
         </p>
       </div>

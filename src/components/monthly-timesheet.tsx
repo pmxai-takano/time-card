@@ -21,6 +21,7 @@ import {
   totalBreakDurationMinutes,
   buildDiscretionaryMonthlyMetrics,
   MONTHLY_80H_WARN_MINUTES,
+  type AttendanceBreakdown,
 } from "@/lib/time";
 import type { WorkSystem } from "@/lib/work-system";
 import type { MonthCombinedMinutes } from "@/lib/discretionary-monthly";
@@ -42,6 +43,18 @@ type Props = {
   recentCombinedMonths?: MonthCombinedMinutes[];
 };
 
+const EMPTY_BREAKDOWN: AttendanceBreakdown = {
+  workMinutes: 0,
+  overtimeMinutes: 0,
+  holidayWorkMinutes: 0,
+  deemedOvertimeMinutes: 0,
+  deemedNonStatutoryMinutes: 0,
+  nightMinutes: 0,
+  discretionaryWorkMinutes: 0,
+  nonStatutoryHolidayMinutes: 0,
+  actualOvertimeReferenceMinutes: 0,
+};
+
 function displayTime(value: string | null | undefined): string {
   if (!value) return "";
   return value.slice(0, 5);
@@ -49,6 +62,10 @@ function displayTime(value: string | null | undefined): string {
 
 function formatPercent1(ratio: number): string {
   return `${(ratio * 100).toFixed(1)}%`;
+}
+
+function formatCellMinutes(minutes: number): string {
+  return minutes ? formatMinutes(minutes) : "";
 }
 
 export function MonthlyTimesheet({
@@ -84,13 +101,7 @@ export function MonthlyTimesheet({
             break2Start: record.break2_start ?? null,
             break2End: record.break2_end ?? null,
           })
-        : {
-            overtimeMinutes: 0,
-            holidayWorkMinutes: 0,
-            deemedOvertimeMinutes: 0,
-            deemedNonStatutoryMinutes: 0,
-            nightMinutes: 0,
-          };
+        : EMPTY_BREAKDOWN;
 
       acc.workMinutes += workMin;
       acc.overtimeMinutes += breakdown.overtimeMinutes;
@@ -98,6 +109,9 @@ export function MonthlyTimesheet({
       acc.deemedOvertimeMinutes += breakdown.deemedOvertimeMinutes;
       acc.deemedNonStatutoryMinutes += breakdown.deemedNonStatutoryMinutes;
       acc.nightMinutes += breakdown.nightMinutes;
+      acc.discretionaryWorkMinutes += breakdown.discretionaryWorkMinutes;
+      acc.nonStatutoryHolidayMinutes += breakdown.nonStatutoryHolidayMinutes;
+      acc.actualOvertimeReferenceMinutes += breakdown.actualOvertimeReferenceMinutes;
 
       return acc;
     },
@@ -108,6 +122,9 @@ export function MonthlyTimesheet({
       deemedOvertimeMinutes: 0,
       deemedNonStatutoryMinutes: 0,
       nightMinutes: 0,
+      discretionaryWorkMinutes: 0,
+      nonStatutoryHolidayMinutes: 0,
+      actualOvertimeReferenceMinutes: 0,
     },
   );
 
@@ -115,7 +132,7 @@ export function MonthlyTimesheet({
     ? buildDiscretionaryMonthlyMetrics(totals)
     : null;
 
-  const rolling = isDiscretionary
+  const rolling = isDiscretionary && discMetrics
     ? computeRollingAverages(
         recentCombinedMonths.length > 0
           ? recentCombinedMonths
@@ -123,7 +140,7 @@ export function MonthlyTimesheet({
               {
                 year,
                 month,
-                combinedMinutes: totals.overtimeMinutes + totals.holidayWorkMinutes,
+                combinedMinutes: discMetrics.companyDeemedNonStatutoryMinutes,
               },
             ],
       )
@@ -172,7 +189,7 @@ export function MonthlyTimesheet({
       <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-slate-300 bg-white shadow-sm">
         <table
           className={`w-full table-fixed border-collapse text-xs sm:text-sm ${
-            isDiscretionary ? "min-w-[860px]" : "min-w-[780px]"
+            isDiscretionary ? "min-w-[1100px]" : "min-w-[780px]"
           }`}
         >
           <colgroup>
@@ -180,15 +197,27 @@ export function MonthlyTimesheet({
             <col className="w-[4%]" />
             <col className="w-[6%]" />
             <col className="w-[7%]" />
-            <col className="w-[7%]" />
-            <col className="w-[7%]" />
             <col className="w-[6%]" />
             <col className="w-[6%]" />
-            <col className="w-[6%]" />
-            <col className="w-[7%]" />
-            {isDiscretionary ? <col className="w-[8%]" /> : null}
-            <col className={isDiscretionary ? "w-[16%]" : "w-[22%]"} />
-            <col className="w-[10%]" />
+            <col className="w-[5%]" />
+            {isDiscretionary ? (
+              <>
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+                <col className="w-[6%]" />
+                <col className="w-[6%]" />
+                <col className="w-[5%]" />
+              </>
+            ) : (
+              <>
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+              </>
+            )}
+            <col className={isDiscretionary ? "w-[12%]" : "w-[22%]"} />
+            <col className="w-[8%]" />
           </colgroup>
           <thead>
             <tr className="bg-indigo-950 text-white">
@@ -199,28 +228,35 @@ export function MonthlyTimesheet({
               <th className="border border-indigo-900 px-1 py-2">出社</th>
               <th className="border border-indigo-900 px-1 py-2">退社</th>
               <th className="border border-indigo-900 px-1 py-2">休憩</th>
-              <th className="border border-indigo-900 px-1 py-2">勤務</th>
-              <th
-                className="border border-indigo-900 px-1 py-2"
-                title={
-                  isDiscretionary
-                    ? "法定休日を除く時間外（月45時間判定対象）"
-                    : undefined
-                }
-              >
-                {isDiscretionary ? "法定外(休除)" : "残業"}
-              </th>
-              <th className="border border-indigo-900 px-1 py-2">
-                {isDiscretionary ? "法定休日" : "休日出勤"}
-              </th>
               {isDiscretionary ? (
-                <th
-                  className="border border-indigo-900 px-1 py-2"
-                  title="法定外（休除）＋法定休日労働"
-                >
-                  みなし法定外
-                </th>
-              ) : null}
+                <>
+                  <th className="border border-indigo-900 px-1 py-2" title="実労働時間">
+                    勤務(実労働)
+                  </th>
+                  <th className="border border-indigo-900 px-1 py-2" title="みなし労働時間（平日9:30）">
+                    みなし労働
+                  </th>
+                  <th
+                    className="border border-indigo-900 px-1 py-2"
+                    title="社内みなし法定外（暫定）= 法休除＋法定休日"
+                  >
+                    みなし法定外
+                  </th>
+                  <th className="border border-indigo-900 px-1 py-2" title="所定休日・法定外休日の実労働">
+                    所定休日
+                  </th>
+                  <th className="border border-indigo-900 px-1 py-2">法定休日</th>
+                  <th className="border border-indigo-900 px-1 py-2" title="22:00〜翌5:00">
+                    深夜
+                  </th>
+                </>
+              ) : (
+                <>
+                  <th className="border border-indigo-900 px-1 py-2">勤務</th>
+                  <th className="border border-indigo-900 px-1 py-2">残業</th>
+                  <th className="border border-indigo-900 px-1 py-2">休日出勤</th>
+                </>
+              )}
               <th className="border border-indigo-900 px-1 py-2">メモ</th>
               <th className="border border-indigo-900 px-1 py-2">編集</th>
             </tr>
@@ -257,13 +293,7 @@ export function MonthlyTimesheet({
                     break2Start: record.break2_start ?? null,
                     break2End: record.break2_end ?? null,
                   })
-                : {
-                    overtimeMinutes: 0,
-                    holidayWorkMinutes: 0,
-                    deemedOvertimeMinutes: 0,
-                    deemedNonStatutoryMinutes: 0,
-                    nightMinutes: 0,
-                  };
+                : EMPTY_BREAKDOWN;
 
               return (
                 <tr
@@ -296,24 +326,40 @@ export function MonthlyTimesheet({
                   <td className="border border-slate-200 px-1 py-1 text-center">
                     {brkMin ? formatMinutes(brkMin) : ""}
                   </td>
-                  <td className="border border-slate-200 px-1 py-1 text-center">
-                    {workMin ? formatMinutes(workMin) : ""}
-                  </td>
-                  <td className="border border-slate-200 px-1 py-1 text-center">
-                    {breakdown.overtimeMinutes ? formatMinutes(breakdown.overtimeMinutes) : ""}
-                  </td>
-                  <td className="border border-slate-200 px-1 py-1 text-center">
-                    {breakdown.holidayWorkMinutes
-                      ? formatMinutes(breakdown.holidayWorkMinutes)
-                      : ""}
-                  </td>
                   {isDiscretionary ? (
-                    <td className="border border-slate-200 px-1 py-1 text-center">
-                      {breakdown.deemedNonStatutoryMinutes
-                        ? formatMinutes(breakdown.deemedNonStatutoryMinutes)
-                        : ""}
-                    </td>
-                  ) : null}
+                    <>
+                      <td className="border border-slate-200 px-1 py-1 text-center">
+                        {formatCellMinutes(workMin)}
+                      </td>
+                      <td className="border border-slate-200 px-1 py-1 text-center">
+                        {formatCellMinutes(breakdown.discretionaryWorkMinutes)}
+                      </td>
+                      <td className="border border-slate-200 px-1 py-1 text-center">
+                        {formatCellMinutes(breakdown.deemedNonStatutoryMinutes)}
+                      </td>
+                      <td className="border border-slate-200 px-1 py-1 text-center">
+                        {formatCellMinutes(breakdown.nonStatutoryHolidayMinutes)}
+                      </td>
+                      <td className="border border-slate-200 px-1 py-1 text-center">
+                        {formatCellMinutes(breakdown.holidayWorkMinutes)}
+                      </td>
+                      <td className="border border-slate-200 px-1 py-1 text-center">
+                        {formatCellMinutes(breakdown.nightMinutes)}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="border border-slate-200 px-1 py-1 text-center">
+                        {formatCellMinutes(workMin)}
+                      </td>
+                      <td className="border border-slate-200 px-1 py-1 text-center">
+                        {formatCellMinutes(breakdown.overtimeMinutes)}
+                      </td>
+                      <td className="border border-slate-200 px-1 py-1 text-center">
+                        {formatCellMinutes(breakdown.holidayWorkMinutes)}
+                      </td>
+                    </>
+                  )}
                   <td className="max-w-0 min-w-[30ch] border border-slate-200 px-1 py-1 text-left text-[11px] text-slate-800">
                     {record?.memo ? (
                       <span className="block truncate" title={record.memo}>
@@ -343,97 +389,161 @@ export function MonthlyTimesheet({
       ) : null}
 
       <div className="w-full space-y-2 rounded-lg border bg-white p-3 text-xs sm:text-sm">
-        <p>実勤務時間合計: {formatMinutes(totals.workMinutes)}</p>
         {isDiscretionary && discMetrics ? (
           <>
-            <p>みなし残業合計: {formatMinutes(discMetrics.deemedOvertimeMinutes)}</p>
-            <p>
-              みなし加算後労働時間: {formatMinutes(discMetrics.totalLaborMinutes)}
-            </p>
-            <p title="月45時間判定の対象">
-              法定外（休除みなし）:{" "}
-              {formatMinutes(discMetrics.overtimeExcludingLegalHolidayMinutes)}
-            </p>
-            <p>法定休日労働: {formatMinutes(discMetrics.legalHolidayWorkMinutes)}</p>
-            <p title="法定外（休除）＋法定休日">
-              みなし法定外（時間外・法定休日労働合計）:{" "}
-              {formatMinutes(discMetrics.combinedOvertimeAndHolidayMinutes)}
-            </p>
-            <p>深夜労働（22:00〜翌5:00）: {formatMinutes(discMetrics.nightMinutes)}</p>
-            <p
-              className={
-                discMetrics.over45
-                  ? "text-orange-700"
-                  : discMetrics.approach45
-                    ? "text-amber-700"
-                    : undefined
-              }
-            >
-              法定外45H超みなし: {formatMinutes(discMetrics.excessOver45Minutes)}
-            </p>
-            <p className={discMetrics.approach45 || discMetrics.remainingTo45Minutes === 0 ? "text-amber-700" : undefined}>
-              法休除 当月残みなし（月45時間までの残り）:{" "}
-              {formatMinutes(discMetrics.remainingTo45Minutes)}
-            </p>
-            <p
-              className={
-                discMetrics.over100
-                  ? "font-semibold text-red-700"
-                  : discMetrics.warn80
-                    ? "text-red-600"
-                    : undefined
-              }
-            >
-              法休含 当月残みなし（単月100時間未満までの残り）:{" "}
-              {formatMinutes(discMetrics.remainingUnder100Minutes)}
-            </p>
-            {discMetrics.over45 ? (
-              <p className="rounded bg-orange-50 px-2 py-1 text-orange-800">
-                月45時間を超過しています。特別条項の適用状況は本システムでは判定しません。
+            <section className="space-y-1">
+              <h3 className="font-semibold text-slate-800">A) 実態</h3>
+              <p>実労働合計: {formatMinutes(discMetrics.workMinutes)}</p>
+              <p>深夜: {formatMinutes(discMetrics.nightMinutes)}</p>
+              <p title="MAX(実労働 − 9:30, 0)。法令レイヤーへは加算しない">
+                実労働超過参考(9:30超):{" "}
+                {formatMinutes(discMetrics.actualOvertimeReferenceMinutes)}
               </p>
-            ) : null}
-            {discMetrics.warn80 ? (
-              <p className="rounded bg-red-50 px-2 py-1 text-red-800">
-                法定休日込み時間が80時間以上です（健康管理上の長時間労働警告）。単月80時間超だけでは法令違反と断定しません。
+            </section>
+
+            <section className="space-y-1 border-t border-slate-200 pt-2">
+              <h3 className="font-semibold text-slate-800">B) 会社制度・給与（暫定）</h3>
+              <p>みなし労働合計: {formatMinutes(discMetrics.discretionaryWorkMinutes)}</p>
+              <p title="みなし法定外1:30×勤務日">
+                裁量手当対象(みなし1:30×日):{" "}
+                {formatMinutes(discMetrics.allowanceTargetMinutes)}
               </p>
-            ) : null}
-            {discMetrics.over100 ? (
-              <p className="rounded bg-red-100 px-2 py-1 font-semibold text-red-900">
-                法定休日込み時間が100時間以上です（単月上限超過警告）。
+              <p>所定休日労働: {formatMinutes(discMetrics.nonStatutoryHolidayMinutes)}</p>
+              <p>法定休日: {formatMinutes(discMetrics.legalHolidayWorkMinutes)}</p>
+              <p title="裁量手当対象＋所定休日労働">
+                社内60h判定値: {formatMinutes(discMetrics.company60hBasisMinutes)}
               </p>
-            ) : null}
-            <div className="border-t border-slate-200 pt-2">
-              <p className="mb-1 font-medium">2〜6か月平均（法定外＋法定休日）</p>
-              {rolling.map((r) => (
-                <p
-                  key={r.months}
-                  className={
-                    r.averageMinutes !== null && r.averageMinutes > MONTHLY_80H_WARN_MINUTES
-                      ? "font-semibold text-red-700"
-                      : undefined
-                  }
-                >
-                  {r.months}か月平均:{" "}
-                  {r.averageMinutes !== null ? formatMinutes(r.averageMinutes) : "—（データ不足）"}
-                </p>
-              ))}
-              {anyRollingOver80 ? (
-                <p className="mt-1 rounded bg-red-100 px-2 py-1 font-semibold text-red-900">
-                  2〜6か月平均のいずれかが80時間を超えています。
+              <p>60h超: {formatMinutes(discMetrics.companyOver60Minutes)}</p>
+              <p title="月45時間判定の対象（暫定）">
+                法休除: {formatMinutes(discMetrics.overtimeExcludingLegalHolidayMinutes)}
+              </p>
+              <p title="法休除＋法定休日（暫定）">
+                社内みなし法定外:{" "}
+                {formatMinutes(discMetrics.companyDeemedNonStatutoryMinutes)}
+              </p>
+              <p>社内80hまでの残り: {formatMinutes(discMetrics.company80hRemainingMinutes)}</p>
+              {discMetrics.companyWarn80 ? (
+                <p className="rounded bg-red-50 px-2 py-1 text-red-800">
+                  社内みなし法定外が80時間を超えています（会社制度・健康管理上の警告）。
                 </p>
               ) : null}
-            </div>
-            <p className="border-t border-slate-200 pt-2 text-[11px] text-slate-600">
-              凡例: 40〜45時間＝黄（上限接近）／45時間超＝橙（原則上限超過）／法休込80時間以上＝赤／100時間以上・複数月平均80超＝強い赤
-            </p>
+            </section>
+
+            <section className="space-y-1 border-t border-slate-200 pt-2">
+              <h3 className="font-semibold text-slate-800">C) 法令・36協定</h3>
+              <p
+                className={
+                  discMetrics.over45
+                    ? "text-orange-700"
+                    : discMetrics.approach45
+                      ? "text-amber-700"
+                      : undefined
+                }
+              >
+                法休除: {formatMinutes(discMetrics.overtimeExcludingLegalHolidayMinutes)}
+              </p>
+              <p
+                className={
+                  discMetrics.over100
+                    ? "font-semibold text-red-700"
+                    : discMetrics.lawWarn80
+                      ? "text-red-600"
+                      : undefined
+                }
+                title="社内みなし法定外（暫定）と同値"
+              >
+                法休含(=社内みなし法定外暫定):{" "}
+                {formatMinutes(discMetrics.companyDeemedNonStatutoryMinutes)}
+              </p>
+              <p
+                className={
+                  discMetrics.over45
+                    ? "text-orange-700"
+                    : discMetrics.approach45
+                      ? "text-amber-700"
+                      : undefined
+                }
+              >
+                45h超: {formatMinutes(discMetrics.excessOver45Minutes)}
+              </p>
+              <p
+                className={
+                  discMetrics.approach45 || discMetrics.remainingTo45Minutes === 0
+                    ? "text-amber-700"
+                    : undefined
+                }
+              >
+                45hまでの残り: {formatMinutes(discMetrics.remainingTo45Minutes)}
+              </p>
+              <p
+                className={
+                  discMetrics.over100
+                    ? "font-semibold text-red-700"
+                    : discMetrics.lawWarn80
+                      ? "text-red-600"
+                      : undefined
+                }
+              >
+                100h未満までの残り: {formatMinutes(discMetrics.remainingUnder100Minutes)}
+              </p>
+              {discMetrics.over45 ? (
+                <p className="rounded bg-orange-50 px-2 py-1 text-orange-800">
+                  月45時間を超過しています。特別条項の適用状況は本システムでは判定しません。
+                </p>
+              ) : null}
+              {discMetrics.lawWarn80 ? (
+                <p className="rounded bg-red-50 px-2 py-1 text-red-800">
+                  法定休日込み時間が80時間以上です（健康管理上の長時間労働警告）。単月80時間超だけでは法令違反と断定しません。
+                </p>
+              ) : null}
+              {discMetrics.over100 ? (
+                <p className="rounded bg-red-100 px-2 py-1 font-semibold text-red-900">
+                  法定休日込み時間が100時間以上です（単月上限超過警告）。
+                </p>
+              ) : null}
+              <div className="pt-1">
+                <p className="mb-1 font-medium">2〜6か月平均（社内みなし法定外）</p>
+                {rolling.map((r) => (
+                  <p
+                    key={r.months}
+                    className={
+                      r.averageMinutes !== null && r.averageMinutes > MONTHLY_80H_WARN_MINUTES
+                        ? "font-semibold text-red-700"
+                        : undefined
+                    }
+                  >
+                    {r.months}か月平均:{" "}
+                    {r.averageMinutes !== null
+                      ? formatMinutes(r.averageMinutes)
+                      : "—（データ不足）"}
+                  </p>
+                ))}
+                {anyRollingOver80 ? (
+                  <p className="mt-1 rounded bg-red-100 px-2 py-1 font-semibold text-red-900">
+                    2〜6か月平均のいずれかが80時間を超えています。
+                  </p>
+                ) : null}
+              </div>
+              {discMetrics.statusNotes.length > 0 ? (
+                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-slate-600">
+                  {discMetrics.statusNotes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <p className="pt-1 text-[11px] text-slate-600">
+                凡例: 40〜45時間＝黄（上限接近）／45時間超＝橙（原則上限超過）／法休込80時間以上＝赤／100時間以上・複数月平均80超＝強い赤
+              </p>
+            </section>
           </>
         ) : (
           <>
+            <p>実勤務時間合計: {formatMinutes(totals.workMinutes)}</p>
             <p>残業時間合計（法定外）: {formatMinutes(totals.overtimeMinutes)}</p>
             <p>休日出勤合計（法定休日・日曜）: {formatMinutes(totals.holidayWorkMinutes)}</p>
           </>
         )}
-        <p>
+        <p className="border-t border-slate-200 pt-2">
           出社率実績:{" "}
           {officeRateActual !== null
             ? `${formatPercent1(officeRateActual)}（祝日を除く平日 出社 ${weekdayOfficeDays}日 / 勤務 ${weekdayWorkDays}日）`

@@ -121,16 +121,24 @@ export function breakDurationMinutes(
 const STANDARD_WORK_MINUTES = 8 * 60;
 const HALF_DAY_PM_STANDARD_MINUTES = 3 * 60;
 const EIGHTEEN_OCLOCK_MINUTES = 18 * 60;
-/** 裁量労働制の平日のみなし残業（法定外）分数 */
+/** 裁量: 所定労働時間 8:00 */
+export const STANDARD_DAILY_MINUTES = STANDARD_WORK_MINUTES;
+/** 裁量: みなし労働時間 9:30（協定） */
+export const DISCRETIONARY_DAILY_MINUTES = 9 * 60 + 30;
+/** 裁量: みなし法定外 1:30（9:30 − 8:00） */
 export const DEEMED_WEEKDAY_OVERTIME_MINUTES = 90;
 /** 深夜帯: 22:00〜翌5:00 */
 const NIGHT_START_MINUTES = 22 * 60;
-const NIGHT_END_MINUTES = 5 * 60; // next calendar day absolute offset within day cycle
+const NIGHT_END_MINUTES = 5 * 60;
 export const MONTHLY_45H_MINUTES = 45 * 60;
-/** 単月100時間未満の上限（99:59） */
+/** 単月100時間未満の上限表示用（99:59）。100:00到達で不適合 */
 export const MONTHLY_UNDER_100H_CAP_MINUTES = 99 * 60 + 59;
+export const MONTHLY_100H_LIMIT_MINUTES = 100 * 60;
 export const MONTHLY_80H_WARN_MINUTES = 80 * 60;
 export const MONTHLY_40H_APPROACH_MINUTES = 40 * 60;
+export const COMPANY_60H_MINUTES = 60 * 60;
+export const ANNUAL_SPECIAL_OVERTIME_MINUTES = 720 * 60;
+export const SPECIAL_MONTH_COUNT_LIMIT = 6;
 
 /** 休憩が [seg0, seg1) と重なる分（勤務区間に載った休憩のみ） */
 function breakOverlapWithEveningSegment(
@@ -227,24 +235,31 @@ export function calculateOvertimeMinutes(params: {
 }
 
 export type AttendanceBreakdown = {
+  /** 実労働時間 */
   workMinutes: number;
   /**
-   * 法定外（法定休日除外）。
-   * 裁量: 平日 max(1:30, 実働-8h) + 土曜・祝日実働 + 日曜→月曜またぎの月曜分 など
+   * 法休除（会社制度・暫定の45h対象）。
+   * 裁量: みなし法定外1:30 + 所定休日実働 + 日曜→月曜またぎ等（実労働の9:30超は含めない）
    * 通常: 従来の残業
    */
   overtimeMinutes: number;
-  /** 法定休日（日曜）の実勤務 */
+  /** 法定休日（日曜）の実労働 */
   holidayWorkMinutes: number;
-  /** みなし残業枠（裁量・平日勤務日は 1.5 時間） */
+  /** みなし法定外（日次・平日1:30）／裁量手当対象の日次分 */
   deemedOvertimeMinutes: number;
   /**
-   * みなし法定外（画面）= 法定外（休除）+ 法定休日労働
-   * 裁量では overtime + holiday。通常は 0。
+   * 社内みなし法定外（暫定）= 法休除 + 法定休日
+   * 通常は 0
    */
   deemedNonStatutoryMinutes: number;
-  /** 深夜 22:00〜翌5:00 の実勤務（みなしとは別集計） */
+  /** 深夜 22:00〜翌5:00 の実労働 */
   nightMinutes: number;
+  /** みなし労働時間（裁量・平日勤務日は 9:30） */
+  discretionaryWorkMinutes: number;
+  /** 所定休日・法定外休日（土曜・祝日）の実労働 */
+  nonStatutoryHolidayMinutes: number;
+  /** 実労働超過参考値 MAX(実労働 − 9:30, 0)。法令レイヤーへは加算しない */
+  actualOvertimeReferenceMinutes: number;
 };
 
 type BreakdownParams = {
@@ -267,6 +282,9 @@ function emptyBreakdown(workMinutes = 0): AttendanceBreakdown {
     deemedOvertimeMinutes: 0,
     deemedNonStatutoryMinutes: 0,
     nightMinutes: 0,
+    discretionaryWorkMinutes: 0,
+    nonStatutoryHolidayMinutes: 0,
+    actualOvertimeReferenceMinutes: 0,
   };
 }
 
@@ -365,10 +383,10 @@ function splitShiftByCalendarDay(params: {
   return segments;
 }
 
-/** 平日の残業（裁量）: max(みなし1:30, 実働 − 8h) */
+/** 平日の残業（裁量・廃止予定の互換）。仕様 v0.1 では固定 1:30 を用いる。 */
 export function discretionaryWeekdayOvertimeMinutes(workMinutes: number): number {
   if (workMinutes <= 0) return 0;
-  return Math.max(DEEMED_WEEKDAY_OVERTIME_MINUTES, workMinutes - STANDARD_WORK_MINUTES);
+  return DEEMED_WEEKDAY_OVERTIME_MINUTES;
 }
 
 /**
@@ -486,13 +504,14 @@ function classifyStandardSegment(params: {
 }
 
 /**
- * 裁量労働制の日別内訳。
+ * 裁量労働制の日別内訳（仕様書 v0.1.0）。
  *
- * - 平日（勤務日が平日で実勤務あり）: みなし 1:30、残業 = max(1:30, 実働-8h)
- * - 土曜・祝日（日曜以外）: 実働全量を法定外（休除）
- * - 日曜: 法定休日労働（45h判定から除外）
- * - 日曜→月曜またぎの月曜分: 実働全量を法定外（みなしは付与しない）
- * - みなし法定外 = 法定外（休除）+ 法定休日
+ * - 所定労働日に実勤務あり: みなし労働 9:30、みなし法定外 1:30
+ * - 実労働の 9:30 超は参考値のみ（法令・45hへ自動加算しない）
+ * - 土曜・祝日: 所定休日実労働（法休除の会社集計へ加算）
+ * - 日曜: 法定休日労働
+ * - 日曜→月曜またぎの月曜分: 所定外の追加実労働として法休除へ
+ * - 社内みなし法定外（暫定）= 法休除 + 法定休日
  */
 function calculateDiscretionaryBreakdown(params: {
   workDate: string;
@@ -531,9 +550,9 @@ function calculateDiscretionaryBreakdown(params: {
   const workDateIsDeemedWeekday = isDeemedOvertimeWeekdayJapan(workDate);
   const treatResidual = dayCode === "残";
 
-  let overtimeMinutes = 0;
   let holidayWorkMinutes = 0;
-  let weekdayWorkOnWorkDate = 0;
+  let nonStatutoryHolidayMinutes = 0;
+  let weekdayExtraMinutes = 0;
 
   for (const segment of segments) {
     if (segment.minutes <= 0) continue;
@@ -544,32 +563,33 @@ function calculateDiscretionaryBreakdown(params: {
       continue;
     }
 
-    // 日曜開始の日跨ぎで月曜に入った分 → 法定外へ実働全量（みなしなし）
+    // 日曜開始の日跨ぎで月曜に入った分 → 法休除へ実働全量（みなしなし）
     if (!segment.isWorkDate && workDateIsLegalHoliday && kind === "weekday") {
-      overtimeMinutes += segment.minutes;
+      weekdayExtraMinutes += segment.minutes;
       continue;
     }
 
     if (kind === "nonStatutoryHoliday" || (treatResidual && segment.isWorkDate)) {
-      overtimeMinutes += segment.minutes;
+      nonStatutoryHolidayMinutes += segment.minutes;
       continue;
     }
 
-    // 平日区間
-    if (segment.isWorkDate && workDateIsDeemedWeekday) {
-      weekdayWorkOnWorkDate += segment.minutes;
-    } else {
-      // 祝日明けの平日など、みなし対象外の平日暦日分は実働全量を法定外へ
-      overtimeMinutes += segment.minutes;
+    // 平日区間（みなし対象日の実働自体は法休除へ重ねない）
+    if (!(segment.isWorkDate && workDateIsDeemedWeekday)) {
+      weekdayExtraMinutes += segment.minutes;
     }
   }
 
-  const deemedOvertimeMinutes =
-    workMinutes > 0 && workDateIsDeemedWeekday ? DEEMED_WEEKDAY_OVERTIME_MINUTES : 0;
+  const onDeemedWeekday = workMinutes > 0 && workDateIsDeemedWeekday;
+  const discretionaryWorkMinutes = onDeemedWeekday ? DISCRETIONARY_DAILY_MINUTES : 0;
+  const deemedOvertimeMinutes = onDeemedWeekday ? DEEMED_WEEKDAY_OVERTIME_MINUTES : 0;
+  const actualOvertimeReferenceMinutes = onDeemedWeekday
+    ? Math.max(0, workMinutes - DISCRETIONARY_DAILY_MINUTES)
+    : 0;
 
-  if (weekdayWorkOnWorkDate > 0) {
-    overtimeMinutes += discretionaryWeekdayOvertimeMinutes(weekdayWorkOnWorkDate);
-  }
+  // 法休除（会社制度・暫定）: みなし1:30 + 所定休日実働 + その他追加実働
+  const overtimeMinutes =
+    deemedOvertimeMinutes + nonStatutoryHolidayMinutes + weekdayExtraMinutes;
 
   const nightMinutes = nightWorkMinutesInShift(
     clockIn,
@@ -587,25 +607,25 @@ function calculateDiscretionaryBreakdown(params: {
     deemedOvertimeMinutes,
     deemedNonStatutoryMinutes: overtimeMinutes + holidayWorkMinutes,
     nightMinutes,
+    discretionaryWorkMinutes,
+    nonStatutoryHolidayMinutes,
+    actualOvertimeReferenceMinutes,
   };
 }
 
 /**
  * 勤務・残業・休日出勤・みなしの内訳。
  *
- * 共通:
- * - 日跨ぎ勤務は 0:00 で暦日分割し、各暦日の区分で振り分ける
- * - 法定休日 = 日曜
+ * 共通: 日跨ぎは 0:00 で暦日分割。法定休日 = 日曜。
  *
- * 通常:
- * - 土曜・祝日・「残」: 全日残業（日曜は休日出勤）
- * - 「前」/「後」/平日: 従来ルール
+ * 通常: 土曜・祝日・「残」は残業、日曜は休日出勤、平日は 8h 超など従来ルール。
  *
- * 裁量労働制:
- * - 平日実勤務あり: みなし 1:30、残業 = max(1:30, 実働-8h)（月45h判定も同値）
- * - 土曜・祝日: 実働全量を法定外
- * - 日曜: 法定休日労働
- * - みなし法定外 = 法定外 + 法定休日
+ * 裁量（仕様書 v0.1）:
+ * - 所定労働日の実勤務あり → みなし労働 9:30・みなし法定外 1:30
+ * - 実労働の 9:30 超は参考値のみ
+ * - 土曜・祝日実働 → 所定休日労働（法休除へ）
+ * - 日曜実働 → 法定休日
+ * - 社内みなし法定外（暫定）= 法休除 + 法定休日
  */
 export function calculateAttendanceBreakdown(
   params: BreakdownParams,
@@ -689,28 +709,39 @@ export function calculateAttendanceBreakdown(
     deemedOvertimeMinutes: 0,
     deemedNonStatutoryMinutes: 0,
     nightMinutes,
+    discretionaryWorkMinutes: 0,
+    nonStatutoryHolidayMinutes: 0,
+    actualOvertimeReferenceMinutes: 0,
   };
 }
 
 export type DiscretionaryMonthlyMetrics = {
+  /** 実態 */
   workMinutes: number;
-  deemedOvertimeMinutes: number;
-  /** みなし加算後の労働時間（実働 + みなし） */
-  totalLaborMinutes: number;
-  /** 法定外（休除）= 月45h判定対象 */
-  overtimeExcludingLegalHolidayMinutes: number;
-  /** 法定休日労働 */
-  legalHolidayWorkMinutes: number;
-  /** みなし法定外 = 法定外 + 法定休日 */
-  combinedOvertimeAndHolidayMinutes: number;
   nightMinutes: number;
+  actualOvertimeReferenceMinutes: number;
+  /** 会社制度 */
+  discretionaryWorkMinutes: number;
+  allowanceTargetMinutes: number;
+  nonStatutoryHolidayMinutes: number;
+  legalHolidayWorkMinutes: number;
+  company60hBasisMinutes: number;
+  companyOver60Minutes: number;
+  /** 法休除（暫定・会社45h対象） */
+  overtimeExcludingLegalHolidayMinutes: number;
+  /** 社内みなし法定外（暫定） */
+  companyDeemedNonStatutoryMinutes: number;
+  company80hRemainingMinutes: number;
+  companyWarn80: boolean;
+  /** 法令・36協定 */
   excessOver45Minutes: number;
   remainingTo45Minutes: number;
   remainingUnder100Minutes: number;
   over45: boolean;
   approach45: boolean;
-  warn80: boolean;
+  lawWarn80: boolean;
   over100: boolean;
+  statusNotes: string[];
 };
 
 export function buildDiscretionaryMonthlyMetrics(params: {
@@ -719,20 +750,42 @@ export function buildDiscretionaryMonthlyMetrics(params: {
   overtimeMinutes: number;
   holidayWorkMinutes: number;
   nightMinutes: number;
+  discretionaryWorkMinutes: number;
+  nonStatutoryHolidayMinutes: number;
+  actualOvertimeReferenceMinutes: number;
 }): DiscretionaryMonthlyMetrics {
-  const overtimeExcludingLegalHolidayMinutes = params.overtimeMinutes;
+  const allowanceTargetMinutes = params.deemedOvertimeMinutes;
+  const nonStatutoryHolidayMinutes = params.nonStatutoryHolidayMinutes;
   const legalHolidayWorkMinutes = params.holidayWorkMinutes;
-  const combined =
+  const overtimeExcludingLegalHolidayMinutes = params.overtimeMinutes;
+  const companyDeemedNonStatutoryMinutes =
     overtimeExcludingLegalHolidayMinutes + legalHolidayWorkMinutes;
+  const company60hBasisMinutes = allowanceTargetMinutes + nonStatutoryHolidayMinutes;
+
+  const statusNotes = [
+    "会社制度値・法令値はレイヤー別に表示しています。",
+    "社内みなし法定外・80時間措置の式は総務サマリー照合中のため暫定です。",
+    "実労働の9:30超は参考値であり、法休除・45h判定へ自動加算していません。",
+    "週40時間超過による法定時間外の再計算は未実装です。",
+  ];
 
   return {
     workMinutes: params.workMinutes,
-    deemedOvertimeMinutes: params.deemedOvertimeMinutes,
-    totalLaborMinutes: params.workMinutes + params.deemedOvertimeMinutes,
-    overtimeExcludingLegalHolidayMinutes,
-    legalHolidayWorkMinutes,
-    combinedOvertimeAndHolidayMinutes: combined,
     nightMinutes: params.nightMinutes,
+    actualOvertimeReferenceMinutes: params.actualOvertimeReferenceMinutes,
+    discretionaryWorkMinutes: params.discretionaryWorkMinutes,
+    allowanceTargetMinutes,
+    nonStatutoryHolidayMinutes,
+    legalHolidayWorkMinutes,
+    company60hBasisMinutes,
+    companyOver60Minutes: Math.max(0, company60hBasisMinutes - COMPANY_60H_MINUTES),
+    overtimeExcludingLegalHolidayMinutes,
+    companyDeemedNonStatutoryMinutes,
+    company80hRemainingMinutes: Math.max(
+      0,
+      MONTHLY_80H_WARN_MINUTES - companyDeemedNonStatutoryMinutes,
+    ),
+    companyWarn80: companyDeemedNonStatutoryMinutes > MONTHLY_80H_WARN_MINUTES,
     excessOver45Minutes: Math.max(
       0,
       overtimeExcludingLegalHolidayMinutes - MONTHLY_45H_MINUTES,
@@ -743,13 +796,14 @@ export function buildDiscretionaryMonthlyMetrics(params: {
     ),
     remainingUnder100Minutes: Math.max(
       0,
-      MONTHLY_UNDER_100H_CAP_MINUTES - combined,
+      MONTHLY_UNDER_100H_CAP_MINUTES - companyDeemedNonStatutoryMinutes,
     ),
     over45: overtimeExcludingLegalHolidayMinutes > MONTHLY_45H_MINUTES,
     approach45:
       overtimeExcludingLegalHolidayMinutes >= MONTHLY_40H_APPROACH_MINUTES &&
       overtimeExcludingLegalHolidayMinutes <= MONTHLY_45H_MINUTES,
-    warn80: combined >= MONTHLY_80H_WARN_MINUTES,
-    over100: combined >= 100 * 60,
+    lawWarn80: companyDeemedNonStatutoryMinutes >= MONTHLY_80H_WARN_MINUTES,
+    over100: companyDeemedNonStatutoryMinutes >= MONTHLY_100H_LIMIT_MINUTES,
+    statusNotes,
   };
 }

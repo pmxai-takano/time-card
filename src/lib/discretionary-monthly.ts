@@ -82,6 +82,9 @@ export function metricsFromBreakdownTotals(totals: {
   holidayWorkMinutes: number;
   deemedOvertimeMinutes: number;
   nightMinutes: number;
+  discretionaryWorkMinutes: number;
+  nonStatutoryHolidayMinutes: number;
+  actualOvertimeReferenceMinutes: number;
 }): DiscretionaryMonthlyMetrics {
   return buildDiscretionaryMonthlyMetrics(totals);
 }
